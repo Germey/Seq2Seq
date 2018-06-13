@@ -168,6 +168,8 @@ def train():
                     
                     print('Source', source[0][0:10])
                     print('Target', target[0][0:10])
+                    print('Source Len', source_len[0:10])
+                    print('Target Len', target_len[0:10])
                     
                     processed_number += len(source_seq)
                     

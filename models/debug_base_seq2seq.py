@@ -13,7 +13,7 @@ class Seq2SeqModel():
         self.build_embed()
         self.build_encoder()
         self.build_decoder()
-        self.build_optimizer()
+        # self.build_optimizer()
     
     def init_config(self, config):
         self.config = config
@@ -162,20 +162,24 @@ class Seq2SeqModel():
         self.outputs = tf.layers.dense(logits, self.encoder_vocab_size, use_bias=True)
         self.probs = tf.nn.softmax(self.outputs, -1)
         self.preds = tf.argmax(self.probs, -1)
-    
+        
         # training settings
         if self.mode == 'train':
             self.loss = tf.contrib.seq2seq.sequence_loss(logits=self.outputs,
                                                          targets=self.decoder_targets_train, weights=self.mask)
             
-        
+            print('lloss', self.loss)
             optimizer = tf.train.AdamOptimizer(self.learning_rate)
             trainable_params = tf.trainable_variables()
             gradients = tf.gradients(self.loss, trainable_params)
             clip_gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
-            self.train_op = optimizer.apply_gradients(zip(clip_gradients, trainable_params))
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
-    
+
+            self.train_op = optimizer.apply_gradients(zip(clip_gradients, trainable_params), global_step=self.global_step)
+            print('train op', self.train_op)
+            
+            
+            
     def build_optimizer(self):
         if self.mode == 'train':
             self.logger.info('Setting optimizer...')
