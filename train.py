@@ -8,20 +8,19 @@ import numpy as np
 import tensorflow as tf
 from os.path import join
 from utils.iterator import TrainTextIterator
-from models.debug_base_seq2seq import Seq2SeqModel
+from models.base_seq2seq import Seq2SeqModel
 from tqdm import tqdm
 from utils.funcs import prepare_pair_batch, get_summary
 import os
-
 import logging
 
 # Data loading parameters
 
 tf.app.flags.DEFINE_string('source_vocabulary', 'dataset/couplet/vocabs.json', 'Path to source vocabulary')
 tf.app.flags.DEFINE_string('target_vocabulary', 'dataset/couplet/vocabs.json', 'Path to target vocabulary')
-tf.app.flags.DEFINE_string('source_train_data', 'dataset/couplet/train.x.txt',
+tf.app.flags.DEFINE_string('source_train_data', 'dataset/couplet/sample.x.txt',
                            'Path to source training data')
-tf.app.flags.DEFINE_string('target_train_data', 'dataset/couplet/train.y.txt',
+tf.app.flags.DEFINE_string('target_train_data', 'dataset/couplet/sample.y.txt',
                            'Path to target training data')
 tf.app.flags.DEFINE_string('source_valid_data', 'dataset/couplet/valid.x.txt',
                            'Path to source validation data')
@@ -174,10 +173,13 @@ def train():
                     processed_number += len(source_seq)
                     
                     # Execute a single training step
-                    step_loss, _ = model.train(sess, encoder_inputs=source, encoder_inputs_length=source_len,
+                    step_loss, _, decoder_predicts, decoder_targets_train = model.train(sess, encoder_inputs=source, encoder_inputs_length=source_len,
                                                decoder_inputs=target, decoder_inputs_length=target_len)
                     
-                    print('Step loss', step_loss)
+                    # print('Pred', model.decoder_predicts.eval())
+                    print('Pred', decoder_predicts)
+                    print('Target', decoder_targets_train)
+                    
                     loss += float(step_loss) / FLAGS.display_freq
                     
                     words_seen += float(np.sum(source_len + target_len))

@@ -1,5 +1,5 @@
 import tensorflow as tf
-
+import math
 from utils.config import GO, EOS
 
 
@@ -126,8 +126,7 @@ class Seq2SeqModel():
             self.encoder_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.encoder_vocab_size, self.embedding_size],
                                                       dtype=self.dtype,
-                                                      initializer=tf.truncated_normal_initializer(mean=0.0,
-                                                                                                  stddev=0.01))
+                                                      initializer=tf.random_uniform_initializer(-math.sqrt(3), math.sqrt(3), dtype=self.dtype))
             self.logger.debug('encoder_embeddings %s', self.encoder_embeddings)
             
             # encoder_inputs_embedded : [batch_size, encoder_max_time_steps, embedding_size]
@@ -226,8 +225,7 @@ class Seq2SeqModel():
             self.decoder_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.decoder_vocab_size, self.embedding_size],
                                                       dtype=self.dtype,
-                                                      initializer=tf.truncated_normal_initializer(mean=0.0,
-                                                                                                  stddev=0.01))
+                                                      initializer=tf.random_uniform_initializer(-math.sqrt(3), math.sqrt(3), dtype=self.dtype))
             self.logger.debug('decoder_embeddings %s', self.decoder_embeddings)
             
             if self.mode == 'train':
@@ -268,7 +266,7 @@ class Seq2SeqModel():
             if self.mode == 'train':
                 # decoder_masks: [batch_size, reduce_max(decoder_inputs_length)]
                 self.decoder_masks = tf.sequence_mask(lengths=self.decoder_inputs_train_length,
-                                                      maxlen=tf.reduce_max(self.decoder_inputs_train_length),
+                                                      maxlen=tf.reduce_max(self.decoder_targets_train_length),
                                                       dtype=self.dtype,
                                                       name='masks')
                 self.logger.debug('decoder_masks %s', self.decoder_masks)
@@ -279,7 +277,7 @@ class Seq2SeqModel():
                                                              weights=self.decoder_masks)
                 self.logger.debug('loss %s', self.loss)
             
-            else:
+            #else:
                 # decoder_probabilities: [batch_size, decoder_max_time_steps, decoder_vocab_size]
                 self.decoder_probabilities = tf.nn.softmax(self.decoder_logits, -1)
                 self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
@@ -301,16 +299,16 @@ class Seq2SeqModel():
                 self.logger.info('Optimizer has been set')
             
             # compute gradients
-            # self.gradients = tf.gradients(ys=self.loss, xs=self.trainable_verbs)
+            self.gradients = tf.gradients(ys=self.loss, xs=self.trainable_verbs)
             
             # clip gradients by a given maximum_gradient_norm
-            # self.clip_gradients, _ = tf.clip_by_global_norm(self.gradients, self.max_gradient_norm)
+            self.clip_gradients, _ = tf.clip_by_global_norm(self.gradients, self.max_gradient_norm)
             
             # train op
-            # self.train_op = self.optimizer.apply_gradients(zip(self.clip_gradients, self.trainable_verbs),
-            #                                               global_step=self.global_step)
+            self.train_op = self.optimizer.apply_gradients(zip(self.clip_gradients, self.trainable_verbs),
+                                                          global_step=self.global_step)
             
-            self.train_op = self.optimizer.minimize(loss=self.loss, global_step=self.global_step)
+            # self.train_op = self.optimizer.minimize(loss=self.loss, global_step=self.global_step)
     
     def save(self, sess, save_path, var_list=None, global_step=None):
         saver = tf.train.Saver(var_list)
@@ -338,6 +336,8 @@ class Seq2SeqModel():
         output_feed = [
             self.loss,
             self.train_op,
+            self.decoder_predicts,
+            self.decoder_targets_train
         ]
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs

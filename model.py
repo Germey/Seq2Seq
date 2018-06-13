@@ -323,7 +323,8 @@ class Seq2SeqModel():
         
         output_feed = [
             self.loss,
-            self.summary_op
+            self.summary_op,
+            
         ]
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs

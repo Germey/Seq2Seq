@@ -102,7 +102,7 @@ class Seq2SeqModel():
                                                            name='decoder_inputs_inference_length')
             self.logger.debug('decoder_inputs_inference_length %s', self.decoder_inputs_inference_length)
 
-        self.max_sequence_length = tf.reduce_max(self.decoder_inputs_train_length, name='max_length')
+        self.max_sequence_length = tf.reduce_max(self.decoder_targets_train_length, name='max_length')
         self.mask = tf.sequence_mask(self.decoder_inputs_train_length, self.max_sequence_length, dtype=tf.float32,
                                      name='masks')
 
@@ -133,9 +133,13 @@ class Seq2SeqModel():
         return outputs, states
 
     def build_embed(self):
+        import math
+        sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
+        initializer = tf.random_uniform_initializer(-sqrt3, sqrt3, dtype=self.dtype)
+        
         self.lookup_table = tf.get_variable('lookup_table', dtype=tf.float32,
                                             shape=[self.encoder_vocab_size, self.embedding_size],
-                                            initializer=tf.truncated_normal_initializer(mean=0.0, stddev=0.01))
+                                            initializer=initializer)
 
     def build_encoder(self):
         encoder_enc = tf.nn.embedding_lookup(self.lookup_table, self.encoder_inputs)
@@ -230,6 +234,9 @@ class Seq2SeqModel():
         output_feed = [
             self.loss,
             self.train_op,
+            self.preds,
+            self.decoder_targets_train,
+        
         ]
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs
