@@ -10,9 +10,10 @@ class Seq2SeqModel():
         self.logger = logger
         self.init_config(config)
         self.build_placeholders()
+        self.build_embed()
         self.build_encoder()
         self.build_decoder()
-        self.build_optimizer()
+        #self.build_optimizer()
     
     def init_config(self, config):
         self.config = config
@@ -32,6 +33,9 @@ class Seq2SeqModel():
         self.max_gradient_norm = config['max_gradient_norm']
         self.use_bidirectional = config['use_bidirectional']
         self.use_dropout = config['use_dropout']
+        self.batch_size = 5
+        self.encoder_max_time_steps = 29
+        self.decoder_max_time_steps = 29
         self.global_step = tf.Variable(0, trainable=False, name='global_step')
         self.global_epoch_step = tf.Variable(0, trainable=False, name='global_epoch_step')
         self.global_epoch_step_op = tf.assign(self.global_epoch_step, tf.add(self.global_epoch_step, 1))
@@ -41,28 +45,28 @@ class Seq2SeqModel():
         self.keep_prob = tf.placeholder(self.dtype, shape=[], name='keep_prob')
         
         # encoder_inputs: [batch_size, max_time_steps]
-        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, None],
+        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.encoder_max_time_steps],
                                              name='encoder_inputs')
         self.logger.debug('encoder_inputs %s', self.encoder_inputs)
         
         # encoder_inputs_length: [batch_size]
-        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
+        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[self.batch_size],
                                                     name='encoder_inputs_length')
         self.logger.debug('encoder_inputs_length %s', self.encoder_inputs_length)
         
         # batch_size
-        self.batch_size = tf.shape(self.encoder_inputs)[0]
-        self.logger.debug('batch_size %s', self.batch_size)
+        # self.batch_size = tf.shape(self.encoder_inputs)[0]
+        # self.logger.debug('batch_size %s', self.batch_size)
         
         if self.mode == 'train':
             
             # decoder_inputs: [batch_size, max_time_steps]
-            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, None],
+            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.decoder_max_time_steps],
                                                  name='decoder_inputs')
             self.logger.debug('decoder_inputs %s', self.decoder_inputs)
             
             # decoder_inputs_length: [batch_size]
-            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
+            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[self.batch_size],
                                                         name='decoder_inputs_length')
             self.logger.debug('decoder_inputs_length %s', self.decoder_inputs_length)
             
@@ -119,8 +123,31 @@ class Seq2SeqModel():
         depth = depth if depth else self.encoder_depth
         cells = [self.build_single_cell() for _ in range(depth)]
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
+
+    def create_bi_rnn(self, inputs, scope='bi_rnn', reuse=None):
+        with tf.variable_scope(scope, reuse=reuse):
+            cell_fw = tf.contrib.rnn.GRUCell(self.hidden_units)
+            cell_bw = tf.contrib.rnn.GRUCell(self.hidden_units)
+            outputs, states = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, inputs, dtype=tf.float32)
+        return outputs, states
+
+    def build_embed(self):
+        import math
+        sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
+        initializer = tf.random_uniform_initializer(-sqrt3, sqrt3, dtype=self.dtype)
     
-    
+        self.lookup_table = tf.get_variable('lookup_table', dtype=tf.float32,
+                                            shape=[self.encoder_vocab_size, self.embedding_size],
+                                            initializer=initializer)
+
+    def build_encoder2(self):
+        encoder_enc = tf.nn.embedding_lookup(self.lookup_table, self.encoder_inputs)
+        outputs_1, states_1 = self.create_bi_rnn(encoder_enc, scope='encoder_birnn_1')
+        outputs_1 = tf.concat(outputs_1, -1)
+        outputs_2, states_2 = self.create_bi_rnn(outputs_1, scope='encoder_birnn_2')
+        forward_state, backward_state = states_2
+        self.encoder_last_state = backward_state
+        print('encoder_last_state', self.encoder_last_state)
     
     def build_encoder(self):
         with tf.variable_scope('encoder'):
@@ -213,14 +240,49 @@ class Seq2SeqModel():
         depth = depth if depth else self.decoder_depth
         cells = [self.build_single_cell() for _ in range(depth)]
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
-    
+
     def build_decoder(self):
+        self.max_sequence_length = tf.reduce_max(self.decoder_targets_train_length, name='max_length')
+        self.mask = tf.sequence_mask(self.decoder_inputs_train_length, self.max_sequence_length, dtype=tf.float32,
+                                     name='masks')
+        decoder_enc = tf.nn.embedding_lookup(self.lookup_table, self.decoder_inputs_train)
+        # decoder_cell = tf.contrib.rnn.GRUCell(self.hidden_units)
+        decoder_cell = self.build_decoder_cell()
+        
+        self.initial_state = self.encoder_last_state
+        logits, states = tf.nn.dynamic_rnn(decoder_cell, decoder_enc,
+                                           initial_state=self.initial_state,
+                                           sequence_length=self.decoder_inputs_train_length, dtype=tf.float32)
+        self.last_state = states
+        self.outputs = tf.layers.dense(logits, self.encoder_vocab_size, use_bias=True)
+        self.probs = tf.nn.softmax(self.outputs, -1)
+        self.decoder_predicts = tf.argmax(self.probs, -1)
+    
+        # training settings
+        if self.mode == 'train':
+            self.loss = tf.contrib.seq2seq.sequence_loss(logits=self.outputs,
+                                                         targets=self.decoder_targets_train, weights=self.mask)
+        
+            print('lloss', self.loss)
+            optimizer = tf.train.AdamOptimizer(self.learning_rate)
+            trainable_params = tf.trainable_variables()
+            gradients = tf.gradients(self.loss, trainable_params)
+            clip_gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        
+            self.train_op = optimizer.apply_gradients(zip(clip_gradients, trainable_params),
+                                                      global_step=self.global_step)
+            print('train op', self.train_op)
+
+    def build_decoder3(self):
         with tf.variable_scope('decoder'):
             # decoder_initial_state: [batch_size, hidden_units]
             self.decoder_initial_state = self.encoder_last_state
             self.logger.debug('decoder_initial_state %s', self.decoder_initial_state)
             
-            self.decoder_cell = self.build_decoder_cell()
+            #self.decoder_cell = self.build_decoder_cell()
+            self.decoder_cell = tf.contrib.rnn.LSTMCell(self.hidden_units)
+
             self.logger.debug('decoder_cell %s', self.decoder_cell)
             
             # decoder_embeddings: [decoder_vocab_size, embedding_size]
@@ -230,33 +292,19 @@ class Seq2SeqModel():
                                                       initializer=tf.random_uniform_initializer(-math.sqrt(3), math.sqrt(3), dtype=self.dtype))
             self.logger.debug('decoder_embeddings %s', self.decoder_embeddings)
             
-            if self.mode == 'train':
-                # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
-                self.decoder_inputs_embedded = tf.nn.embedding_lookup(params=self.decoder_embeddings,
-                                                                      ids=self.decoder_inputs_train)
-                self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
-                
-                # decoder_outputs: [batch_size, decoder_max_time_steps, hidden_units]
-                # decoder_last_state: [batch_size, hidden_units]
-                self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
-                                                                                  initial_state=self.decoder_initial_state,
-                                                                                  inputs=self.decoder_inputs_embedded,
-                                                                                  sequence_length=self.decoder_inputs_train_length,
-                                                                                  dtype=self.dtype)
+            # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
+            self.decoder_inputs_embedded = tf.nn.embedding_lookup(params=self.decoder_embeddings,
+                                                                  ids=self.decoder_inputs_train)
+            self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
             
-            else:
-                # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
-                self.decoder_inputs_embedded = tf.nn.embedding_lookup(self.decoder_embeddings,
-                                                                      self.decoder_inputs_inference)
-                self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
-                
-                # decoder_outputs: [batch_size, decoder_max_time_steps, hidden_units]
-                # decoder_last_state: [batch_size, hidden_units]
-                self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
-                                                                                  initial_state=self.decoder_initial_state,
-                                                                                  inputs=self.decoder_inputs_embedded,
-                                                                                  sequence_length=self.decoder_inputs_inference_length,
-                                                                                  dtype=self.dtype)
+            # decoder_outputs: [batch_size, decoder_max_time_steps, hidden_units]
+            # decoder_last_state: [batch_size, hidden_units]
+            self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
+                                                                              inputs=self.decoder_inputs_embedded,
+                                                                              sequence_length=self.decoder_inputs_train_length,
+                                                                              dtype=self.dtype)
+            
+            
             
             self.logger.debug('decoder_outputs %s', self.decoder_outputs)
             self.logger.debug('decoder_last_state %s', self.decoder_last_state)
@@ -289,7 +337,8 @@ class Seq2SeqModel():
                 # decoder_predicts: [batch_size, decoder_max_time_steps]
                 self.decoder_predicts = tf.argmax(self.decoder_probabilities, -1)
                 self.logger.debug('decoder_predicts %s', self.decoder_predicts)
-    
+        self.build_optimizer()
+        
     def build_optimizer(self):
         if self.mode == 'train':
             self.logger.info('Setting optimizer...')
@@ -299,7 +348,7 @@ class Seq2SeqModel():
             # self.logger.debug('trainable_verbs %s', self.trainable_verbs)
             
             if self.optimizer_type.lower() == 'adam':
-                self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+                self.optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.learning_rate)
                 self.logger.info('Optimizer has been set')
             
             # compute gradients
@@ -312,7 +361,7 @@ class Seq2SeqModel():
             self.train_op = self.optimizer.apply_gradients(zip(self.clip_gradients, self.trainable_verbs),
                                                           global_step=self.global_step)
             
-            self.train_op = self.optimizer.minimize(loss=self.loss, global_step=self.global_step)
+            # self.train_op = self.optimizer.minimize(loss=self.loss, global_step=self.global_step)
     
     def save(self, sess, save_path, var_list=None, global_step=None):
         saver = tf.train.Saver(var_list)

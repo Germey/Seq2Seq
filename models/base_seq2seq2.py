@@ -12,7 +12,7 @@ class Seq2SeqModel():
         self.build_placeholders()
         self.build_encoder()
         self.build_decoder()
-        self.build_optimizer()
+        #self.build_optimizer()
     
     def init_config(self, config):
         self.config = config
@@ -213,14 +213,58 @@ class Seq2SeqModel():
         depth = depth if depth else self.decoder_depth
         cells = [self.build_single_cell() for _ in range(depth)]
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
+
+    def build_decoder2(self):
+    
+        decoder_cell = self.build_decoder_cell()
+        self.initial_state = self.encoder_last_state
+        
+        
+        sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
+        initializer = tf.random_uniform_initializer(-sqrt3, sqrt3, dtype=self.dtype)
+    
+        self.lookup_table = tf.get_variable('lookup_table', dtype=tf.float32,
+                                            shape=[self.encoder_vocab_size, self.embedding_size],
+                                            initializer=initializer)
+        self.max_sequence_length = tf.reduce_max(self.decoder_targets_train_length, name='max_length')
+        self.mask = tf.sequence_mask(self.decoder_inputs_train_length, self.max_sequence_length, dtype=tf.float32,
+                                     name='masks')
+        decoder_enc = tf.nn.embedding_lookup(self.lookup_table, self.decoder_inputs_train)
+        # decoder_cell = tf.contrib.rnn.LSTMCell(self.hidden_units)
+        
+
+        logits, states = tf.nn.dynamic_rnn(decoder_cell, decoder_enc,
+                                           initial_state=self.initial_state,
+                                           sequence_length=self.decoder_inputs_train_length, dtype=tf.float32)
+        self.last_state = states
+        self.outputs = tf.layers.dense(logits, self.encoder_vocab_size, use_bias=True)
+        self.probs = tf.nn.softmax(self.outputs, -1)
+        self.decoder_predicts = tf.argmax(self.probs, -1)
+    
+        # training settings
+        if self.mode == 'train':
+            self.loss = tf.contrib.seq2seq.sequence_loss(logits=self.outputs,
+                                                         targets=self.decoder_targets_train, weights=self.mask)
+        
+            print('lloss', self.loss)
+            optimizer = tf.train.AdamOptimizer(self.learning_rate)
+            trainable_params = tf.trainable_variables()
+            gradients = tf.gradients(self.loss, trainable_params)
+            clip_gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
+        
+            self.train_op = optimizer.apply_gradients(zip(clip_gradients, trainable_params),
+                                                      global_step=self.global_step)
+            print('train op', self.train_op)
     
     def build_decoder(self):
         with tf.variable_scope('decoder'):
+            self.decoder_cell = self.build_decoder_cell()
+
             # decoder_initial_state: [batch_size, hidden_units]
             self.decoder_initial_state = self.encoder_last_state
             self.logger.debug('decoder_initial_state %s', self.decoder_initial_state)
             
-            self.decoder_cell = self.build_decoder_cell()
             self.logger.debug('decoder_cell %s', self.decoder_cell)
             
             # decoder_embeddings: [decoder_vocab_size, embedding_size]
@@ -230,33 +274,20 @@ class Seq2SeqModel():
                                                       initializer=tf.random_uniform_initializer(-math.sqrt(3), math.sqrt(3), dtype=self.dtype))
             self.logger.debug('decoder_embeddings %s', self.decoder_embeddings)
             
-            if self.mode == 'train':
-                # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
-                self.decoder_inputs_embedded = tf.nn.embedding_lookup(params=self.decoder_embeddings,
-                                                                      ids=self.decoder_inputs_train)
-                self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
-                
-                # decoder_outputs: [batch_size, decoder_max_time_steps, hidden_units]
-                # decoder_last_state: [batch_size, hidden_units]
-                self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
-                                                                                  initial_state=self.decoder_initial_state,
-                                                                                  inputs=self.decoder_inputs_embedded,
-                                                                                  sequence_length=self.decoder_inputs_train_length,
-                                                                                  dtype=self.dtype)
+            # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
+            self.decoder_inputs_embedded = tf.nn.embedding_lookup(params=self.decoder_embeddings,
+                                                                  ids=self.decoder_inputs_train)
+            self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
             
-            else:
-                # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
-                self.decoder_inputs_embedded = tf.nn.embedding_lookup(self.decoder_embeddings,
-                                                                      self.decoder_inputs_inference)
-                self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
-                
-                # decoder_outputs: [batch_size, decoder_max_time_steps, hidden_units]
-                # decoder_last_state: [batch_size, hidden_units]
-                self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
-                                                                                  initial_state=self.decoder_initial_state,
-                                                                                  inputs=self.decoder_inputs_embedded,
-                                                                                  sequence_length=self.decoder_inputs_inference_length,
-                                                                                  dtype=self.dtype)
+            # decoder_outputs: [batch_size, decoder_max_time_steps, hidden_units]
+            # decoder_last_state: [batch_size, hidden_units]
+            self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
+                                                                              initial_state=self.decoder_initial_state,
+                                                                              inputs=self.decoder_inputs_embedded,
+                                                                              sequence_length=self.decoder_inputs_train_length,
+                                                                              dtype=self.dtype)
+            
+            
             
             self.logger.debug('decoder_outputs %s', self.decoder_outputs)
             self.logger.debug('decoder_last_state %s', self.decoder_last_state)
@@ -289,30 +320,43 @@ class Seq2SeqModel():
                 # decoder_predicts: [batch_size, decoder_max_time_steps]
                 self.decoder_predicts = tf.argmax(self.decoder_probabilities, -1)
                 self.logger.debug('decoder_predicts %s', self.decoder_predicts)
-    
+        
+        self.build_optimizer2()
+        
     def build_optimizer(self):
+        optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        trainable_params = tf.trainable_variables()
+        gradients = tf.gradients(self.loss, trainable_params)
+        clip_gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+
+        self.train_op = optimizer.apply_gradients(zip(clip_gradients, trainable_params),
+                                                  global_step=self.global_step)
+        print('train op', self.train_op)
+        
+    def build_optimizer2(self):
         if self.mode == 'train':
             self.logger.info('Setting optimizer...')
-            
+
             # trainable_verbs
             self.trainable_verbs = tf.trainable_variables()
             # self.logger.debug('trainable_verbs %s', self.trainable_verbs)
-            
+
             if self.optimizer_type.lower() == 'adam':
                 self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
                 self.logger.info('Optimizer has been set')
-            
+
             # compute gradients
             self.gradients = tf.gradients(ys=self.loss, xs=self.trainable_verbs)
-            
+
             # clip gradients by a given maximum_gradient_norm
             self.clip_gradients, _ = tf.clip_by_global_norm(self.gradients, self.max_gradient_norm)
-            
+
             # train op
             self.train_op = self.optimizer.apply_gradients(zip(self.clip_gradients, self.trainable_verbs),
                                                           global_step=self.global_step)
-            
-            self.train_op = self.optimizer.minimize(loss=self.loss, global_step=self.global_step)
+
+            #self.train_op = self.optimizer.minimize(loss=self.loss, global_step=self.global_step)
     
     def save(self, sess, save_path, var_list=None, global_step=None):
         saver = tf.train.Saver(var_list)
