@@ -1,7 +1,7 @@
 import json
 import tensorflow as tf
-from config import UNK
-from preprocess.iterator import end_token
+from utils.config import UNK
+from utils.iterator import end_token
 import numpy as np
 import pickle
 

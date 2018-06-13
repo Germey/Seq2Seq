@@ -125,7 +125,9 @@ class Seq2SeqModel():
             # encoder_embeddings: [encoder_vocab_size, embedding_size]
             self.encoder_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.encoder_vocab_size, self.embedding_size],
-                                                      dtype=self.dtype)
+                                                      dtype=self.dtype,
+                                                      initializer=tf.truncated_normal_initializer(mean=0.0,
+                                                                                                  stddev=0.01))
             self.logger.debug('encoder_embeddings %s', self.encoder_embeddings)
             
             # encoder_inputs_embedded : [batch_size, encoder_max_time_steps, embedding_size]
@@ -223,7 +225,9 @@ class Seq2SeqModel():
             # decoder_embeddings: [decoder_vocab_size, embedding_size]
             self.decoder_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.decoder_vocab_size, self.embedding_size],
-                                                      dtype=self.dtype)
+                                                      dtype=self.dtype,
+                                                      initializer=tf.truncated_normal_initializer(mean=0.0,
+                                                                                                  stddev=0.01))
             self.logger.debug('decoder_embeddings %s', self.decoder_embeddings)
             
             if self.mode == 'train':
@@ -286,27 +290,29 @@ class Seq2SeqModel():
     
     def build_optimizer(self):
         if self.mode == 'train':
-            self.logger.info('setting optimizer...')
+            self.logger.info('Setting optimizer...')
             
             # trainable_verbs
             self.trainable_verbs = tf.trainable_variables()
-            self.logger.debug('trainable_verbs %s', self.trainable_verbs)
+            # self.logger.debug('trainable_verbs %s', self.trainable_verbs)
             
             if self.optimizer_type.lower() == 'adam':
                 self.optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.learning_rate)
+                self.logger.info('Optimizer has been set')
             
             # compute gradients
-            self.gradients = tf.gradients(ys=self.loss, xs=self.trainable_verbs)
+            # self.gradients = tf.gradients(ys=self.loss, xs=self.trainable_verbs)
             
             # clip gradients by a given maximum_gradient_norm
-            self.clip_gradients, _ = tf.clip_by_global_norm(self.gradients, self.max_gradient_norm)
+            # self.clip_gradients, _ = tf.clip_by_global_norm(self.gradients, self.max_gradient_norm)
             
             # train op
-            self.train_op = self.optimizer.apply_gradients(zip(self.clip_gradients, self.trainable_verbs),
-                                                           global_step=self.global_step)
+            # self.train_op = self.optimizer.apply_gradients(zip(self.clip_gradients, self.trainable_verbs),
+            #                                               global_step=self.global_step)
+            
+            self.train_op = self.optimizer.minimize(loss=self.loss, global_step=self.global_step)
     
     def save(self, sess, save_path, var_list=None, global_step=None):
-        # var_list = None returns the list of all saveable variables
         saver = tf.train.Saver(var_list)
         
         # save model
@@ -314,7 +320,6 @@ class Seq2SeqModel():
         self.logger.info('model saved at %s', save_path)
     
     def restore(self, sess, save_path, var_list=None):
-        # var_list = None returns the list of all saveable variables
         saver = tf.train.Saver(var_list)
         saver.restore(sess=sess, save_path=save_path)
         self.logger.info('model restored from %s', save_path)

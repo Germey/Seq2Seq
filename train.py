@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 from os.path import join
 from utils.iterator import TrainTextIterator
-from models.base_seq2seq import Seq2SeqModel
+from models.debug_base_seq2seq import Seq2SeqModel
 from tqdm import tqdm
 from utils.funcs import prepare_pair_batch, get_summary
 import os
@@ -36,8 +36,8 @@ tf.app.flags.DEFINE_integer('attention_units', 256, 'Number of attention units i
 tf.app.flags.DEFINE_integer('encoder_depth', 3, 'Number of layers in encoder')
 tf.app.flags.DEFINE_integer('decoder_depth', 3, 'Number of layers in decoder')
 tf.app.flags.DEFINE_integer('embedding_size', 300, 'Embedding dimensions of encoder and decoder inputs')
-tf.app.flags.DEFINE_integer('encoder_vocab_size', 6814, 'Source vocabulary size')
-tf.app.flags.DEFINE_integer('decoder_vocab_size', 6814, 'Target vocabulary size')
+tf.app.flags.DEFINE_integer('encoder_vocab_size', 6622, 'Source vocabulary size')
+tf.app.flags.DEFINE_integer('decoder_vocab_size', 6622, 'Target vocabulary size')
 tf.app.flags.DEFINE_boolean('use_residual', False, 'Use residual connection between layers')
 tf.app.flags.DEFINE_boolean('use_dropout', True, 'Use dropout in each rnn cell')
 tf.app.flags.DEFINE_boolean('use_bidirectional', False, 'Use bidirectional rnn cell')
@@ -51,12 +51,12 @@ tf.app.flags.DEFINE_integer('batch_size', 128, 'Batch size')
 tf.app.flags.DEFINE_integer('max_epochs', 10000, 'Maximum # of training epochs')
 tf.app.flags.DEFINE_integer('max_load_batches', 20, 'Maximum # of batches to load at one time')
 tf.app.flags.DEFINE_integer('encoder_max_time_steps', 35, 'Maximum sequence length')
-tf.app.flags.DEFINE_integer('decoder_max_time_steps', 30, 'Maximum sequence length')
+tf.app.flags.DEFINE_integer('decoder_max_time_steps', 35, 'Maximum sequence length')
 tf.app.flags.DEFINE_integer('display_freq', 5, 'Display training status every this iteration')
 tf.app.flags.DEFINE_integer('save_freq', 1000, 'Save model checkpoint every this iteration')
 tf.app.flags.DEFINE_integer('valid_freq', 200, 'Evaluate model every this iteration: valid_data needed')
 tf.app.flags.DEFINE_string('optimizer_type', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop)')
-tf.app.flags.DEFINE_string('model_dir', 'checkpoints/sr', 'Path to save model checkpoints')
+tf.app.flags.DEFINE_string('model_dir', 'checkpoints/couplet', 'Path to save model checkpoints')
 tf.app.flags.DEFINE_string('model_name', 'model.ckpt', 'File name used for model checkpoints')
 tf.app.flags.DEFINE_boolean('use_fp16', False, 'Use half precision float16 instead of float32 as dtype')
 tf.app.flags.DEFINE_boolean('shuffle_each_epoch', False, 'Shuffle training dataset for each epoch')
@@ -66,7 +66,7 @@ tf.app.flags.DEFINE_boolean('sort_by_length', False, 'Sort pre-fetched mini batc
 tf.app.flags.DEFINE_string('gpu', '-1', 'GPU number')
 tf.app.flags.DEFINE_boolean('allow_soft_placement', True, 'Allow device soft placement')
 tf.app.flags.DEFINE_boolean('log_device_placement', False, 'Log placement of ops on devices')
-tf.app.flags.DEFINE_boolean('debug', False, 'Enable debug mode')
+tf.app.flags.DEFINE_boolean('debug', True, 'Enable debug mode')
 tf.app.flags.DEFINE_string('logger_name', 'train', 'Logger name')
 tf.app.flags.DEFINE_string('logger_format', '%(asctime)s - %(name)s - %(levelname)s - %(message)s', 'Logger format')
 
@@ -98,9 +98,9 @@ def create_model(session, FLAGS):
 def train():
     if int(FLAGS.gpu) >= 0:
         os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
-    logger.info('Using GPU', os.environ.get('CUDA_VISIBLE_DEVICES'))
+    logger.info('Using GPU %s', os.environ.get('CUDA_VISIBLE_DEVICES'))
     # Load parallel data to train
-    logger.info('Loading training data..')
+    logger.info('Loading training data...')
     train_set = TrainTextIterator(source=FLAGS.source_train_data,
                                   target=FLAGS.target_train_data,
                                   source_dict=FLAGS.source_vocabulary,
@@ -114,7 +114,7 @@ def train():
                                   )
     
     if FLAGS.source_valid_data and FLAGS.target_valid_data:
-        logger.info('Loading validation data..')
+        logger.info('Loading validation data...')
         valid_set = TrainTextIterator(source=FLAGS.source_valid_data,
                                       target=FLAGS.target_valid_data,
                                       source_dict=FLAGS.source_vocabulary,
@@ -146,12 +146,12 @@ def train():
         start_time = time.time()
         
         # Training loop
-        logger.info('Training..')
+        logger.info('Training...')
         
         for epoch_idx in range(FLAGS.max_epochs):
             if model.global_epoch_step.eval() >= FLAGS.max_epochs:
-                logger.info('Training is already complete.',
-                            'current epoch:{}, max epoch:{}'.format(model.global_epoch_step.eval(), FLAGS.max_epochs))
+                logger.info('Training is already complete. current epoch: %s, max epoch: %s',
+                            model.global_epoch_step.eval(), FLAGS.max_epochs)
                 break
             
             train_set.reset()
@@ -164,9 +164,10 @@ def train():
                     source, source_len, target, target_len = prepare_pair_batch(source_seq, target_seq,
                                                                                 FLAGS.encoder_max_time_steps,
                                                                                 FLAGS.decoder_max_time_steps)
-                    # logger.info('Get Data', source.shape, target.shape, source_len.shape, target_len.shape)
-                    logger.info('Get Data', source.shape, target.shape)
-                    # logger.info('Data', , source_len[0], target_len[0])
+                    logger.info('Training batch data shape %s, %s', source.shape, target.shape)
+                    
+                    print('Source', source[0][0:10])
+                    print('Target', target[0][0:10])
                     
                     processed_number += len(source_seq)
                     
@@ -174,7 +175,9 @@ def train():
                     step_loss, _ = model.train(sess, encoder_inputs=source, encoder_inputs_length=source_len,
                                                decoder_inputs=target, decoder_inputs_length=target_len)
                     
+                    print('Step loss', step_loss)
                     loss += float(step_loss) / FLAGS.display_freq
+                    
                     words_seen += float(np.sum(source_len + target_len))
                     sents_seen += float(source.shape[0])  # batch_size
                     
@@ -196,12 +199,12 @@ def train():
                             step_time,
                             sents_per_sec,
                             words_per_sec
-                            )
+                        )
                         
                         # Record training summary for the current batch
                         summary = get_summary('train_loss', loss)
                         train_summary_writer.add_summary(summary, model.global_step.eval())
-                        logger.info('Record Training Summary', model.global_step.eval())
+                        logger.info('Recording training summary step: %s', model.global_step.eval())
                         train_summary_writer.flush()
                         
                         # logger.info('Processed Number', processed_number)
@@ -215,7 +218,7 @@ def train():
                     
                     # Execute a validation step
                     if valid_set and model.global_step.eval() % FLAGS.valid_freq == 0:
-                        logger.info('Validation step')
+                        logger.info('Validating...')
                         valid_loss = 0.0
                         valid_sents_seen = 0
                         
@@ -227,7 +230,7 @@ def train():
                                                                                         FLAGS.encoder_max_time_steps,
                                                                                         FLAGS.decoder_max_time_steps)
                             
-                            logger.info('Get Valid Data', source.shape, target.shape)
+                            logger.info('Validate batch data shape %s, %s', source.shape, target.shape)
                             
                             # Compute validation loss: average per word cross entropy loss
                             step_loss = model.eval(sess, encoder_inputs=source,
@@ -237,20 +240,20 @@ def train():
                             
                             valid_loss += step_loss * batch_size
                             valid_sents_seen += batch_size
-                            logger.info('{} samples seen'.format(valid_sents_seen))
+                            logger.info('%s samples seen', valid_sents_seen)
                         
                         valid_loss = valid_loss / valid_sents_seen
-                        logger.info('Valid perplexity: {0:.2f}'.format(math.exp(valid_loss)), 'Loss:', valid_loss)
+                        logger.info('Valid perplexity: %.2f Loss: %s', math.exp(valid_loss), valid_loss)
                         
                         # Record training summary for the current batch
                         summary = get_summary('valid_loss', valid_loss)
                         valid_summary_writer.add_summary(summary, model.global_step.eval())
-                        logger.info('Record Valid Summary', model.global_step.eval())
+                        logger.info('Recording valid summary step: %s', model.global_step.eval())
                         valid_summary_writer.flush()
                     
                     # Save the model checkpoint
                     if model.global_step.eval() % FLAGS.save_freq == 0:
-                        logger.info('Saving the model..')
+                        logger.info('Saving the model...')
                         checkpoint_path = os.path.join(FLAGS.model_dir, FLAGS.model_name)
                         model.save(sess, checkpoint_path, global_step=model.global_step)
                         json.dump(model.config,
@@ -259,9 +262,9 @@ def train():
             
             # Increase the epoch index of the model
             model.global_epoch_step_op.eval()
-            logger.info('Epoch {0:} DONE'.format(model.global_epoch_step.eval()))
+            logger.info('Epoch %s DONE', model.global_epoch_step.eval())
         
-        logger.info('Saving the last model..')
+        logger.info('Saving the last model...')
         checkpoint_path = os.path.join(FLAGS.model_dir, FLAGS.model_name)
         model.save(sess, checkpoint_path, global_step=model.global_step)
         json.dump(model.config,

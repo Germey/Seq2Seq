@@ -4,7 +4,6 @@ import pickle
 import utils.config as config
 
 extra_tokens = [config.GO, config.EOS, config.UNK]
-
 start_token = extra_tokens.index(config.GO)  # start_token = 0
 end_token = extra_tokens.index(config.EOS)  # end_token = 1
 unk_token = extra_tokens.index(config.UNK)
