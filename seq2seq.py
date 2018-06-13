@@ -7,10 +7,10 @@ import time
 
 
 class Seq2SeqModel(object):
-    def __init__(self, learning_rate, learning_rate_decay_factor, source_vocab_size=40000, target_vocab_size=40000, num_steps=100, num_epochs=10,
+    def __init__(self, learning_rate, learning_rate_decay_factor, source_vocab_size=40000, target_vocab_size=40000, num_steps=3, num_epochs=10,
                  is_training=True):
-        self.min_loss = float(sys.maxint)
-        self.batch_size = 100
+        self.min_loss = float(0)
+        self.batch_size = 222
         self.dropout_rate = 0.5
         self.max_gradient_norm = 5
         self.learning_rate = tf.Variable(float(learning_rate), trainable=False)
@@ -69,6 +69,7 @@ class Seq2SeqModel(object):
 
         # encode and decode
         enc_outputs, enc_state = self.encode(self.enc_lstm_cell_fw, self.enc_lstm_cell_bw)
+        print('ENC', enc_outputs, enc_state)
         if is_training:
             self.dec_outputs = self.decode(self.dec_lstm_cell, enc_state, enc_outputs)
         else:
@@ -97,13 +98,14 @@ class Seq2SeqModel(object):
         self.saver = tf.train.Saver(tf.global_variables())
 
     def create_placeholder(self):
-        encoder_input_pl = tf.placeholder(tf.int64, [None, self.num_steps])
-        decoder_input_pl = tf.placeholder(tf.int64, [None, self.num_steps])
-        y_output_pl = tf.placeholder(tf.int64, [None, self.num_steps])
-        target_weight = tf.placeholder(tf.float32, [None, self.num_steps])
+        encoder_input_pl = tf.placeholder(tf.int64, [self.batch_size, self.num_steps])
+        decoder_input_pl = tf.placeholder(tf.int64, [self.batch_size, self.num_steps])
+        y_output_pl = tf.placeholder(tf.int64, [self.batch_size, self.num_steps])
+        target_weight = tf.placeholder(tf.float32, [self.batch_size, self.num_steps])
         return encoder_input_pl, decoder_input_pl, y_output_pl, target_weight
 
     def encode(self, cell_fw, cell_bw):
+        print('='*20)
         enc_outputs, (output_state_fw, output_state_bw) = tf.nn.bidirectional_dynamic_rnn(
             cell_fw,
             cell_bw,
@@ -130,6 +132,7 @@ class Seq2SeqModel(object):
             atten_hidden = tf.tanh(tf.add(tf.matmul(prev_state, self.attention_W), tf.matmul(output, self.attention_U)))
             e_i_j = tf.matmul(atten_hidden, self.attention_V)
             e_i.append(e_i_j)
+        print('ei', e_i)
         e_i = tf.concat(e_i, axis=1)
         # e_i = tf.exp(e_i)
         alpha_i = tf.nn.softmax(e_i)
@@ -137,8 +140,10 @@ class Seq2SeqModel(object):
         for alpha_i_j, output in zip(alpha_i, enc_outputs):
             c_i_j = tf.multiply(alpha_i_j, output)
             c_i.append(c_i_j)
+        print('C_IIII', c_i)
         c_i = tf.reshape(tf.concat(c_i, axis=1), [-1, self.num_steps, self.hidden_dim * 2])
         c_i = tf.reduce_sum(c_i, 1)
+        print('finanl ci', c_i)
         return c_i
 
     def decode(self, cell, init_state, enc_outputs, loop_function=None):
@@ -149,10 +154,12 @@ class Seq2SeqModel(object):
 
             if loop_function is not None and prev is not None:
                 with tf.variable_scope("loop_function", reuse=True):
+                    print("loop")
                     inp = loop_function(prev, i)
             if i > 0:
                 tf.get_variable_scope().reuse_variables()
             c_i = self.attention(state, enc_outputs)
+            print('C-i', c_i)
             inp = tf.concat([inp, c_i], axis=1)
             output, state = cell(inp, state)
             # print output.eval()
@@ -250,3 +257,6 @@ class Seq2SeqModel(object):
         # if data_utils.EOS_ID in outputs:
         #     outputs = outputs[:outputs.index(data_utils.EOS_ID)]
         return pred_max.eval()
+
+
+s = Seq2SeqModel(learning_rate=0.01, learning_rate_decay_factor=0.001)
