@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 cd ..
 python3 train.py\
-    --model_class seq2seq\
+    --model_class seq2seq_attention\
     --batch_size 256\
     --hidden_units 400\
     --embedding_size 300\
+    --attention_units 250\
     --encoder_depth 3\
     --decoder_depth 3\
-    --encoder_max_time_steps 35\
-    --decoder_max_time_steps 35\
+    --encoder_max_time_steps 30\
+    --decoder_max_time_steps 30\
     --display_freq 5\
     --save_freq 1000\
     --valid_freq 200\
-    --model_dir checkpoints/couplet_seq2seq\
+    --model_dir checkpoints/couplet_seq2seq_attention\
     --model_name couplet.ckpt\
     --source_vocabulary dataset/couplet/vocab.json\
     --target_vocabulary dataset/couplet/vocab.json\
