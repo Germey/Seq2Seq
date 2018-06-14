@@ -25,6 +25,7 @@ class Seq2SeqAttentionModel():
         self.encoder_vocab_size = config['encoder_vocab_size']
         self.decoder_vocab_size = config['decoder_vocab_size']
         self.logger_name = config['logger_name']
+        self.batch_size = config['batch_size']
         self.dropout_rate = config['dropout_rate']
         self.dtype = tf.float16 if config['use_fp16'] else tf.float32
         self.optimizer_type = config['optimizer_type']
@@ -42,28 +43,28 @@ class Seq2SeqAttentionModel():
         self.keep_prob = tf.placeholder(self.dtype, shape=[], name='keep_prob')
         
         # encoder_inputs: [batch_size, encoder_time_steps]
-        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, self.encoder_max_time_steps],
+        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.encoder_max_time_steps],
                                              name='encoder_inputs')
         self.logger.debug('encoder_inputs %s', self.encoder_inputs)
         
         # encoder_inputs_length: [batch_size]
-        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
+        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[self.batch_size],
                                                     name='encoder_inputs_length')
         self.logger.debug('encoder_inputs_length %s', self.encoder_inputs_length)
         
         # batch_size
-        self.batch_size = tf.shape(self.encoder_inputs)[0]
+        # self.batch_size = tf.shape(self.encoder_inputs)[0]
         self.logger.debug('batch_size %s', self.batch_size)
         
         if self.mode == 'train':
             
             # decoder_inputs: [batch_size, decoder_time_steps]
-            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, self.decoder_max_time_steps],
+            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.decoder_max_time_steps],
                                                  name='decoder_inputs')
             self.logger.debug('decoder_inputs %s', self.decoder_inputs)
             
             # decoder_inputs_length: [batch_size]
-            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
+            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[self.batch_size],
                                                         name='decoder_inputs_length')
             self.logger.debug('decoder_inputs_length %s', self.decoder_inputs_length)
             
