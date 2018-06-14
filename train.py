@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 from os.path import join
 from utils.iterator import TrainTextIterator
-from models.base_seq2seq import Seq2SeqModel
+from models.seq2seq_attention import Seq2SeqAttentionModel as Model
 from tqdm import tqdm
 from utils.funcs import prepare_pair_batch, get_summary
 import os
@@ -16,8 +16,8 @@ import logging
 
 # Data loading parameters
 
-tf.app.flags.DEFINE_string('source_vocabulary', 'dataset/couplet/vocabs.json', 'Path to source vocabulary')
-tf.app.flags.DEFINE_string('target_vocabulary', 'dataset/couplet/vocabs.json', 'Path to target vocabulary')
+tf.app.flags.DEFINE_string('source_vocabulary', 'dataset/couplet/vocab.json', 'Path to source vocabulary')
+tf.app.flags.DEFINE_string('target_vocabulary', 'dataset/couplet/vocab.json', 'Path to target vocabulary')
 tf.app.flags.DEFINE_string('source_train_data', 'dataset/couplet/train.x.txt',
                            'Path to source training data')
 tf.app.flags.DEFINE_string('target_train_data', 'dataset/couplet/train.y.txt',
@@ -47,7 +47,7 @@ tf.app.flags.DEFINE_string('split_sign', ' ', 'Separator of dataset')
 tf.app.flags.DEFINE_float('learning_rate', 0.0002, 'Learning rate')
 tf.app.flags.DEFINE_float('max_gradient_norm', 1.0, 'Clip gradients to this norm')
 tf.app.flags.DEFINE_integer('batch_size', 128, 'Batch size')
-tf.app.flags.DEFINE_integer('max_epochs', 10000, 'Maximum # of training epochs')
+tf.app.flags.DEFINE_integer('max_epochs', 0, 'Maximum # of training epochs')
 tf.app.flags.DEFINE_integer('max_load_batches', 20, 'Maximum # of batches to load at one time')
 tf.app.flags.DEFINE_integer('encoder_max_time_steps', 35, 'Maximum sequence length')
 tf.app.flags.DEFINE_integer('decoder_max_time_steps', 35, 'Maximum sequence length')
@@ -78,7 +78,7 @@ logger = logging.getLogger(FLAGS.logger_name)
 
 def create_model(session, FLAGS):
     config = FLAGS.flag_values_dict()
-    model = Seq2SeqModel(config, 'train', logger)
+    model = Model(config, 'inference', logger)
     
     ckpt = tf.train.get_checkpoint_state(FLAGS.model_dir)
     if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):

@@ -19,7 +19,7 @@ class Seq2SeqModel(object):
         self.num_layers = 1
         self.emb_dim = 100
         self.hidden_dim = 100
-        self.attention_hidden_dim = 100
+        self.attention_hidden_dim = 666
         self.num_epochs = num_epochs
         self.num_steps = num_steps
         self.source_vocab_size = source_vocab_size
@@ -129,16 +129,23 @@ class Seq2SeqModel(object):
         e_i = []
         c_i = []
         for output in enc_outputs:
+            print('SSSSS output', output)
+            print('SSSSSS attention_U', self.attention_U)
             atten_hidden = tf.tanh(tf.add(tf.matmul(prev_state, self.attention_W), tf.matmul(output, self.attention_U)))
+            print('SSSSSS', atten_hidden)
             e_i_j = tf.matmul(atten_hidden, self.attention_V)
             e_i.append(e_i_j)
         print('ei', e_i)
         e_i = tf.concat(e_i, axis=1)
         # e_i = tf.exp(e_i)
         alpha_i = tf.nn.softmax(e_i)
+        print('aiii', alpha_i)
         alpha_i = tf.split(alpha_i, self.num_steps, 1)
+        print('alpha_iiiiiiii', alpha_i)
         for alpha_i_j, output in zip(alpha_i, enc_outputs):
             c_i_j = tf.multiply(alpha_i_j, output)
+            print('alpha_i_j', alpha_i_j)
+            print('Output', output)
             c_i.append(c_i_j)
         print('C_IIII', c_i)
         c_i = tf.reshape(tf.concat(c_i, axis=1), [-1, self.num_steps, self.hidden_dim * 2])
@@ -150,6 +157,8 @@ class Seq2SeqModel(object):
         outputs = []
         prev = None
         state = init_state
+        print('len decoder_inputs_emb', self.decoder_inputs_emb)
+        
         for i, inp in enumerate(self.decoder_inputs_emb):
 
             if loop_function is not None and prev is not None:

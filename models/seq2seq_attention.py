@@ -3,7 +3,7 @@ import math
 from utils.config import GO, EOS
 
 
-class Seq2SeqModel():
+class Seq2SeqAttentionModel():
     def __init__(self, config, mode, logger):
         assert mode.lower() in ['train', 'inference']
         self.mode = mode.lower()
@@ -16,10 +16,11 @@ class Seq2SeqModel():
     
     def init_config(self, config):
         self.config = config
+        self.batch_size = 111
         self.hidden_units = config['hidden_units']
         self.embedding_size = config['embedding_size']
         self.encoder_max_time_steps = config['decoder_max_time_steps']
-        self.decoder_max_time_steps = config['decoder_max_time_steps']
+        self.decoder_max_time_steps = 5
         self.encoder_depth = config['encoder_depth']
         self.decoder_depth = config['decoder_depth']
         self.encoder_vocab_size = config['encoder_vocab_size']
@@ -32,6 +33,7 @@ class Seq2SeqModel():
         self.max_gradient_norm = config['max_gradient_norm']
         self.use_bidirectional = config['use_bidirectional']
         self.use_dropout = config['use_dropout']
+        self.attention_units = config['attention_units']
         self.global_step = tf.Variable(0, trainable=False, name='global_step')
         self.global_epoch_step = tf.Variable(0, trainable=False, name='global_epoch_step')
         self.global_epoch_step_op = tf.assign(self.global_epoch_step, tf.add(self.global_epoch_step, 1))
@@ -40,29 +42,29 @@ class Seq2SeqModel():
         
         self.keep_prob = tf.placeholder(self.dtype, shape=[], name='keep_prob')
         
-        # encoder_inputs: [batch_size, max_time_steps]
-        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, None],
+        # encoder_inputs: [batch_size, encoder_time_steps]
+        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.encoder_max_time_steps],
                                              name='encoder_inputs')
         self.logger.debug('encoder_inputs %s', self.encoder_inputs)
         
         # encoder_inputs_length: [batch_size]
-        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
+        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[self.batch_size],
                                                     name='encoder_inputs_length')
         self.logger.debug('encoder_inputs_length %s', self.encoder_inputs_length)
         
         # batch_size
-        self.batch_size = tf.shape(self.encoder_inputs)[0]
+        # self.batch_size = tf.shape(self.encoder_inputs)[0]
         self.logger.debug('batch_size %s', self.batch_size)
         
         if self.mode == 'train':
             
-            # decoder_inputs: [batch_size, max_time_steps]
-            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, None],
+            # decoder_inputs: [batch_size, decoder_time_steps]
+            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.decoder_max_time_steps],
                                                  name='decoder_inputs')
             self.logger.debug('decoder_inputs %s', self.decoder_inputs)
             
             # decoder_inputs_length: [batch_size]
-            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
+            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[self.batch_size],
                                                         name='decoder_inputs_length')
             self.logger.debug('decoder_inputs_length %s', self.decoder_inputs_length)
             
@@ -74,7 +76,7 @@ class Seq2SeqModel():
             self.decoder_end_token = tf.ones(shape=[self.batch_size, 1], dtype=tf.int32) * EOS
             self.logger.debug('decoder_end_token %s', self.decoder_end_token)
             
-            # decoder_inputs_train: [batch_size, max_time_steps + 1]
+            # decoder_inputs_train: [batch_size, decoder_time_steps + 1]
             self.decoder_inputs_train = tf.concat([self.decoder_start_token, self.decoder_inputs], axis=-1)
             self.logger.debug('decoder_inputs_train %s', self.decoder_inputs_train)
             
@@ -82,7 +84,7 @@ class Seq2SeqModel():
             self.decoder_inputs_train_length = self.decoder_inputs_length + 1
             self.logger.debug('decoder_inputs_train_length %s', self.decoder_inputs_train_length)
             
-            # decoder_targets_train: [batch_size, max_time_steps + 1]
+            # decoder_targets_train: [batch_size, decoder_time_steps + 1]
             self.decoder_targets_train = tf.concat([self.decoder_inputs, self.decoder_end_token], axis=-1)
             self.logger.debug('decoder_targets_train %s', self.decoder_targets_train)
             
@@ -100,6 +102,23 @@ class Seq2SeqModel():
             self.decoder_inputs_inference_length = tf.ones(shape=[self.batch_size], dtype=tf.int32,
                                                            name='decoder_inputs_inference_length')
             self.logger.debug('decoder_inputs_inference_length %s', self.decoder_inputs_inference_length)
+        
+        with tf.variable_scope('attention'):
+            
+            # attention_u: [hidden_units, attention_units]
+            self.attention_u = tf.get_variable(name='a', shape=[self.hidden_units, self.attention_units],
+                                               initializer=tf.truncated_normal_initializer)
+            self.logger.debug('attention_u %s', self.attention_u)
+            
+            # attention_w: [hidden_units, attention_units]
+            self.attention_w = tf.get_variable(name='w', shape=[self.hidden_units, self.attention_units],
+                                               initializer=tf.truncated_normal_initializer)
+            self.logger.debug('attention_w %s', self.attention_w)
+            
+            # attention_v: [attention_units, 1]
+            self.attention_v = tf.get_variable(name='v', shape=[self.attention_units, 1],
+                                               initializer=tf.truncated_normal_initializer)
+            self.logger.debug('attention_v %s', self.attention_v)
     
     def build_single_cell(self):
         """
@@ -120,24 +139,24 @@ class Seq2SeqModel():
         cells = [self.build_single_cell() for _ in range(depth)]
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
     
-    
-    
     def build_encoder(self):
         with tf.variable_scope('encoder'):
             # encoder_embeddings: [encoder_vocab_size, embedding_size]
             self.encoder_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.encoder_vocab_size, self.embedding_size],
                                                       dtype=self.dtype,
-                                                      initializer=tf.random_uniform_initializer(-math.sqrt(3), math.sqrt(3), dtype=self.dtype))
+                                                      initializer=tf.random_uniform_initializer(-math.sqrt(3),
+                                                                                                math.sqrt(3),
+                                                                                                dtype=self.dtype))
             self.logger.debug('encoder_embeddings %s', self.encoder_embeddings)
             
-            # encoder_inputs_embedded : [batch_size, encoder_max_time_steps, embedding_size]
+            # encoder_inputs_embedded : [batch_size, encoder_time_steps, embedding_size]
             self.encoder_inputs_embedded = tf.nn.embedding_lookup(params=self.encoder_embeddings,
                                                                   ids=self.encoder_inputs,
                                                                   name='inputs_embedded')
             self.logger.debug('encoder_inputs_embedded %s', self.encoder_inputs_embedded)
             
-            # encoder_inputs_embedded_dense: [batch_size, encoder_max_time_steps, hidden_units]
+            # encoder_inputs_embedded_dense: [batch_size, encoder_time_steps, hidden_units]
             self.encoder_inputs_embedded_dense = tf.layers.dense(inputs=self.encoder_inputs_embedded,
                                                                  units=self.hidden_units,
                                                                  use_bias=False,
@@ -179,7 +198,7 @@ class Seq2SeqModel():
                     self.logger.debug('upper_outputs %s', upper_outputs)
                     self.logger.debug('upper_last_state %s', upper_last_state)
                     
-                    # encoder_outputs: [batch_size, encoder_max_time_steps, hidden_units]
+                    # encoder_outputs: [batch_size, encoder_time_steps, hidden_units]
                     self.encoder_outputs = upper_outputs
                     self.logger.debug('encoder_outputs %s', self.encoder_outputs)
                     
@@ -188,7 +207,7 @@ class Seq2SeqModel():
                         (upper_last_state,) if self.encoder_depth == 2 else upper_last_state)
                     self.logger.debug('encoder_last_state %s', self.encoder_last_state)
                 else:
-                    # encoder_outputs: [batch_size, encoder_max_time_steps, hidden_units]
+                    # encoder_outputs: [batch_size, encoder_time_steps, hidden_units]
                     self.encoder_outputs = bi_outputs
                     self.logger.debug('encoder_outputs %s', self.encoder_outputs)
                     
@@ -200,8 +219,8 @@ class Seq2SeqModel():
                 # encoder_cell
                 self.encoder_cell = self.build_encoder_cell()
                 self.logger.debug('encoder_cell %s', self.encoder_cell)
-                # encoder_outputs: [batch_size, encoder_max_time_steps, hidden_units]
-                # encoder_last_state: [batch_size, hidden_units] * encoder_depth
+                # encoder_outputs: [batch_size, encoder_time_steps, hidden_units]
+                # encoder_last_state: encoder_depth * [batch_size, hidden_units]
                 self.encoder_outputs, self.encoder_last_state = tf.nn.dynamic_rnn(cell=self.encoder_cell,
                                                                                   inputs=self.encoder_inputs_embedded_dense,
                                                                                   sequence_length=self.encoder_inputs_length,
@@ -214,9 +233,49 @@ class Seq2SeqModel():
         cells = [self.build_single_cell() for _ in range(depth)]
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
     
+    def attention(self, prev_state, encoder_outputs):
+        e_i = []
+        c_i = []
+        # encoder_outputs: encoder_time_steps * [batch_size, hidden_units]
+        # output: [batch_size, hidden_units]
+        for output in encoder_outputs:
+            # e_i_j: [batch_size, 1]
+            e_i_j = tf.matmul(
+                # tanh: [batch_size, attention_units]
+                tf.tanh(
+                    # prev_state: [batch_size, hidden_units]
+                    # attention_w: [hidden_units, attention_units]
+                    tf.matmul(prev_state, self.attention_w) +
+                    # output: [batch_size, hidden_units]
+                    # attention_u: [hidden_units, attention_units]
+                    tf.matmul(output, self.attention_u)
+                ),
+                # attention_v: [attention_units, 1]
+                self.attention_v)
+            # e_i: encoder_time_steps * [batch_size, 1]
+            e_i.append(e_i_j)
+        # e_i: [batch_size, encoder_time_steps]
+        e_i = tf.concat(e_i, axis=1)
+        # alpha_i: [batch_size, encoder_time_steps]
+        alpha_i = tf.nn.softmax(e_i, axis=-1)
+        # alpha_i: encoder_time_steps * [batch_size, 1]
+        alpha_i = tf.split(alpha_i, alpha_i.shape[-1], axis=-1)
+        # alpha_i: encoder_time_steps * [batch_size, 1]
+        # encoder_outputs: encoder_time_steps * [batch_size, hidden_units]
+        for alpha_i_j, output in zip(alpha_i, encoder_outputs):
+            # alpha_i_j: [batch_size, 1]
+            # output: [batch_size, hidden_units]
+            # c_i_j: [batch_size, hidden_units]
+            c_i_j = tf.multiply(alpha_i_j, output)
+            # c_i: encoder_time_steps * [batch_size, hidden_units]
+            c_i.append(c_i_j)
+        # c_i: [batch_size, hidden_units]
+        c_i = tf.reduce_sum(c_i, axis=0)
+        return c_i
+    
     def build_decoder(self):
         with tf.variable_scope('decoder'):
-            # decoder_initial_state: [batch_size, hidden_units]
+            # decoder_initial_state: encoder_depth * [batch_size, hidden_units]
             self.decoder_initial_state = self.encoder_last_state
             self.logger.debug('decoder_initial_state %s', self.decoder_initial_state)
             
@@ -227,39 +286,70 @@ class Seq2SeqModel():
             self.decoder_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.decoder_vocab_size, self.embedding_size],
                                                       dtype=self.dtype,
-                                                      initializer=tf.random_uniform_initializer(-math.sqrt(3), math.sqrt(3), dtype=self.dtype))
+                                                      initializer=tf.random_uniform_initializer(-math.sqrt(3),
+                                                                                                math.sqrt(3),
+                                                                                                dtype=self.dtype))
             self.logger.debug('decoder_embeddings %s', self.decoder_embeddings)
             
+            # encoder_outputs_unstack: encoder_time_steps * [batch_size, hidden_units]
+            self.encoder_outputs_unstack = tf.unstack(self.encoder_outputs, axis=1)
+            
+            # state: encoder_depth * [batch_size, hidden_units]
+            state = self.decoder_initial_state
+            
             if self.mode == 'train':
-                # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
+                
+                # decoder_inputs_embedded: [batch_size, decoder_time_steps, embedding_size]
                 self.decoder_inputs_embedded = tf.nn.embedding_lookup(params=self.decoder_embeddings,
                                                                       ids=self.decoder_inputs_train)
                 self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
                 
-                # decoder_outputs: [batch_size, decoder_max_time_steps, hidden_units]
-                # decoder_last_state: [batch_size, hidden_units]
-                self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
-                                                                                  initial_state=self.decoder_initial_state,
-                                                                                  inputs=self.decoder_inputs_embedded,
-                                                                                  sequence_length=self.decoder_inputs_train_length,
-                                                                                  dtype=self.dtype)
+                # decoder_inputs_embedded_unstack: decoder_time_steps * [batch_size, embedding_size]
+                self.decoder_inputs_embedded_unstack = tf.unstack(self.decoder_inputs_embedded, axis=1)
+                self.logger.debug('decoder_inputs_embedded_unstack %s', self.decoder_inputs_embedded_unstack)
+                
+                self.logger.debug('encoder_outputs_unstack length %s sample %s',
+                                  len(self.encoder_outputs_unstack), self.encoder_outputs_unstack[0])
+                
+                decoder_outputs = []
+                for i, inputs in enumerate(self.decoder_inputs_embedded_unstack):
+                    c_i = self.attention(state[-1], encoder_outputs=self.encoder_outputs_unstack)
+                    inputs = tf.concat([inputs, c_i], axis=1)
+                    outputs, state = self.decoder_cell(inputs=inputs, state=state)
+                    decoder_outputs.append(outputs)
+                
+                # decoder_outputs: [batch_size, decoder_time_steps, hidden_units]
+                self.decoder_outputs = tf.stack(decoder_outputs, axis=1)
+                self.logger.debug('decoder_outputs %s', self.decoder_outputs)
+                
+                # decoder_depth * [batch_size, hidden_units]
+                self.decoder_last_state = state
+                self.logger.debug('decoder_last_state %s', self.decoder_last_state)
             
             else:
+                
                 # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
                 self.decoder_inputs_embedded = tf.nn.embedding_lookup(self.decoder_embeddings,
                                                                       self.decoder_inputs_inference)
                 self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
                 
-                # decoder_outputs: [batch_size, decoder_max_time_steps, hidden_units]
-                # decoder_last_state: [batch_size, hidden_units]
-                self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
-                                                                                  initial_state=self.decoder_initial_state,
-                                                                                  inputs=self.decoder_inputs_embedded,
-                                                                                  sequence_length=self.decoder_inputs_inference_length,
-                                                                                  dtype=self.dtype)
-            
-            self.logger.debug('decoder_outputs %s', self.decoder_outputs)
-            self.logger.debug('decoder_last_state %s', self.decoder_last_state)
+                # decoder_inputs_embedded_unstack: decoder_time_steps * [batch_size, embedding_size]
+                self.decoder_inputs_embedded_unstack = tf.unstack(self.decoder_inputs_embedded, axis=1)
+                self.logger.debug('decoder_inputs_embedded_unstack %s', self.decoder_inputs_embedded_unstack)
+                
+                inputs = self.decoder_inputs_embedded_unstack[0]
+                
+                c_i = self.attention(state[-1], encoder_outputs=self.encoder_outputs_unstack)
+                inputs = tf.concat([inputs, c_i], axis=1)
+                outputs, state = self.decoder_cell(inputs=inputs, state=state)
+                
+                # decoder_outputs: [batch_size, decoder_time_steps, hidden_units]
+                self.decoder_outputs = tf.stack([outputs], axis=1)
+                self.logger.debug('decoder_outputs %s', self.decoder_outputs)
+                
+                # decoder_depth * [batch_size, hidden_units]
+                self.decoder_last_state = state
+                self.logger.debug('decoder_last_state %s', self.decoder_last_state)
             
             # decoder_logits: [batch_size, decoder_max_time_steps, decoder_vocab_size]
             self.decoder_logits = tf.layers.dense(inputs=self.decoder_outputs,
@@ -281,7 +371,7 @@ class Seq2SeqModel():
                                                              weights=self.decoder_masks)
                 self.logger.debug('loss %s', self.loss)
             
-            #else:
+            else:
                 # decoder_probabilities: [batch_size, decoder_max_time_steps, decoder_vocab_size]
                 self.decoder_probabilities = tf.nn.softmax(self.decoder_logits, -1)
                 self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
@@ -310,9 +400,7 @@ class Seq2SeqModel():
             
             # train op
             self.train_op = self.optimizer.apply_gradients(zip(self.clip_gradients, self.trainable_verbs),
-                                                          global_step=self.global_step)
-            
-            self.train_op = self.optimizer.minimize(loss=self.loss, global_step=self.global_step)
+                                                           global_step=self.global_step)
     
     def save(self, sess, save_path, var_list=None, global_step=None):
         saver = tf.train.Saver(var_list)
@@ -370,6 +458,7 @@ class Seq2SeqModel():
         output_feed = [
             self.decoder_probabilities,
             self.decoder_predicts,
+            self.decoder_last_state
         ]
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs
