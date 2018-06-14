@@ -2,7 +2,7 @@
 cd ..
 python3 train.py\
     --model_class seq2seq_attention\
-    --batch_size 5\
+    --batch_size 256\
     --hidden_units 400\
     --embedding_size 300\
     --attention_units 250\
