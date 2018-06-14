@@ -340,8 +340,6 @@ class Seq2SeqModel():
         output_feed = [
             self.loss,
             self.train_op,
-            self.decoder_predicts,
-            self.decoder_targets_train
         ]
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+cd ..
+python3 train.py\
+    --batch_size 256\
+    --hidden_units 400\
+    --embedding_size 300\
+    --encoder_depth 3\
+    --decoder_depth 3\
+    --encoder_max_time_steps 35\
+    --decoder_max_time_steps 35\
+    --display_freq 5\
+    --save_freq 1000\
+    --valid_freq 200\
+    --model_dir checkpoints/couplet_seq2seq\
+    --model_name couplet.ckpt\
+    --source_vocabulary dataset/couplet/vocab.json\
+    --target_vocabulary dataset/couplet/vocab.json\
+    --source_train_data dataset/couplet/train.x.txt\
+    --target_train_data dataset/couplet/train.y.txt\
+    --source_valid_data dataset/couplet/valid.x.txt\
+    --target_valid_data dataset/couplet/valid.y.txt\
+    --encoder_vocab_size 6622\
+    --decoder_vocab_size 6622\
+    --cell_type gru\
+    --max_epochs 100000

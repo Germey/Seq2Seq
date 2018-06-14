@@ -18,9 +18,9 @@ import logging
 
 tf.app.flags.DEFINE_string('source_vocabulary', 'dataset/couplet/vocabs.json', 'Path to source vocabulary')
 tf.app.flags.DEFINE_string('target_vocabulary', 'dataset/couplet/vocabs.json', 'Path to target vocabulary')
-tf.app.flags.DEFINE_string('source_train_data', 'dataset/couplet/sample.x.txt',
+tf.app.flags.DEFINE_string('source_train_data', 'dataset/couplet/train.x.txt',
                            'Path to source training data')
-tf.app.flags.DEFINE_string('target_train_data', 'dataset/couplet/sample.y.txt',
+tf.app.flags.DEFINE_string('target_train_data', 'dataset/couplet/train.y.txt',
                            'Path to target training data')
 tf.app.flags.DEFINE_string('source_valid_data', 'dataset/couplet/valid.x.txt',
                            'Path to source validation data')
@@ -52,8 +52,8 @@ tf.app.flags.DEFINE_integer('max_load_batches', 20, 'Maximum # of batches to loa
 tf.app.flags.DEFINE_integer('encoder_max_time_steps', 35, 'Maximum sequence length')
 tf.app.flags.DEFINE_integer('decoder_max_time_steps', 35, 'Maximum sequence length')
 tf.app.flags.DEFINE_integer('display_freq', 5, 'Display training status every this iteration')
-tf.app.flags.DEFINE_integer('save_freq', 100000, 'Save model checkpoint every this iteration')
-tf.app.flags.DEFINE_integer('valid_freq', 20000, 'Evaluate model every this iteration: valid_data needed')
+tf.app.flags.DEFINE_integer('save_freq', 1000, 'Save model checkpoint every this iteration')
+tf.app.flags.DEFINE_integer('valid_freq', 200, 'Evaluate model every this iteration: valid_data needed')
 tf.app.flags.DEFINE_string('optimizer_type', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop)')
 tf.app.flags.DEFINE_string('model_dir', 'checkpoints/couplet', 'Path to save model checkpoints')
 tf.app.flags.DEFINE_string('model_name', 'model.ckpt', 'File name used for model checkpoints')
@@ -165,20 +165,11 @@ def train():
                                                                                 FLAGS.decoder_max_time_steps)
                     logger.info('Training batch data shape %s, %s', source.shape, target.shape)
                     
-                    print('Source', source[0][0:10])
-                    print('Target', target[0][0:10])
-                    print('Source Len', source_len[0:10])
-                    print('Target Len', target_len[0:10])
-                    
                     processed_number += len(source_seq)
                     
                     # Execute a single training step
-                    step_loss, _, decoder_predicts, decoder_targets_train = model.train(sess, encoder_inputs=source, encoder_inputs_length=source_len,
-                                               decoder_inputs=target, decoder_inputs_length=target_len)
-                    
-                    # print('Pred', model.decoder_predicts.eval())
-                    print('Pred', decoder_predicts)
-                    print('Target', decoder_targets_train)
+                    step_loss, _, = model.train(sess, encoder_inputs=source, encoder_inputs_length=source_len,
+                                                decoder_inputs=target, decoder_inputs_length=target_len)
                     
                     loss += float(step_loss) / FLAGS.display_freq
                     
