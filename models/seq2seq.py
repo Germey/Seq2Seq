@@ -18,7 +18,7 @@ class Seq2SeqModel():
         self.config = config
         self.hidden_units = config['hidden_units']
         self.embedding_size = config['embedding_size']
-        self.encoder_max_time_steps = config['decoder_max_time_steps']
+        self.encoder_max_time_steps = config['encoder_max_time_steps']
         self.decoder_max_time_steps = config['decoder_max_time_steps']
         self.encoder_depth = config['encoder_depth']
         self.decoder_depth = config['decoder_depth']

@@ -16,11 +16,10 @@ class Seq2SeqAttentionModel():
     
     def init_config(self, config):
         self.config = config
-        self.batch_size = 111
         self.hidden_units = config['hidden_units']
         self.embedding_size = config['embedding_size']
-        self.encoder_max_time_steps = config['decoder_max_time_steps']
-        self.decoder_max_time_steps = 5
+        self.encoder_max_time_steps = config['encoder_max_time_steps']
+        self.decoder_max_time_steps = config['decoder_max_time_steps']
         self.encoder_depth = config['encoder_depth']
         self.decoder_depth = config['decoder_depth']
         self.encoder_vocab_size = config['encoder_vocab_size']
@@ -43,28 +42,28 @@ class Seq2SeqAttentionModel():
         self.keep_prob = tf.placeholder(self.dtype, shape=[], name='keep_prob')
         
         # encoder_inputs: [batch_size, encoder_time_steps]
-        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.encoder_max_time_steps],
+        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, self.encoder_max_time_steps],
                                              name='encoder_inputs')
         self.logger.debug('encoder_inputs %s', self.encoder_inputs)
         
         # encoder_inputs_length: [batch_size]
-        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[self.batch_size],
+        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
                                                     name='encoder_inputs_length')
         self.logger.debug('encoder_inputs_length %s', self.encoder_inputs_length)
         
         # batch_size
-        # self.batch_size = tf.shape(self.encoder_inputs)[0]
+        self.batch_size = tf.shape(self.encoder_inputs)[0]
         self.logger.debug('batch_size %s', self.batch_size)
         
         if self.mode == 'train':
             
             # decoder_inputs: [batch_size, decoder_time_steps]
-            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[self.batch_size, self.decoder_max_time_steps],
+            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, self.decoder_max_time_steps],
                                                  name='decoder_inputs')
             self.logger.debug('decoder_inputs %s', self.decoder_inputs)
             
             # decoder_inputs_length: [batch_size]
-            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[self.batch_size],
+            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
                                                         name='decoder_inputs_length')
             self.logger.debug('decoder_inputs_length %s', self.decoder_inputs_length)
             
@@ -306,7 +305,8 @@ class Seq2SeqAttentionModel():
                 
                 # decoder_inputs_embedded_unstack: decoder_time_steps * [batch_size, embedding_size]
                 self.decoder_inputs_embedded_unstack = tf.unstack(self.decoder_inputs_embedded, axis=1)
-                self.logger.debug('decoder_inputs_embedded_unstack %s', self.decoder_inputs_embedded_unstack)
+                self.logger.debug('decoder_inputs_embedded_unstack %s sample %s', len(self.decoder_inputs_embedded_unstack),
+                                  self.decoder_inputs_embedded_unstack[0])
                 
                 self.logger.debug('encoder_outputs_unstack length %s sample %s',
                                   len(self.encoder_outputs_unstack), self.encoder_outputs_unstack[0])

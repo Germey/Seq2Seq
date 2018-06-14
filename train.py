@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 from os.path import join
 from utils.iterator import TrainTextIterator
-from models.seq2seq_attention import Seq2SeqAttentionModel as Model
+from models import *
 from tqdm import tqdm
 from utils.funcs import prepare_pair_batch, get_summary
 import os
@@ -28,6 +28,7 @@ tf.app.flags.DEFINE_string('target_valid_data', 'dataset/couplet/valid.y.txt',
                            'Path to target validation data')
 
 # Network parameters
+tf.app.flags.DEFINE_string('model_class', 'seq2seq_attention', 'Model class')
 tf.app.flags.DEFINE_string('cell_type', 'gru', 'RNN cell for encoder and decoder, default: lstm')
 tf.app.flags.DEFINE_string('attention_type', 'bahdanau', 'Attention mechanism: (bahdanau, luong), default: bahdanau')
 tf.app.flags.DEFINE_integer('hidden_units', 500, 'Number of hidden units in each layer')
@@ -46,11 +47,11 @@ tf.app.flags.DEFINE_string('split_sign', ' ', 'Separator of dataset')
 # Training parameters
 tf.app.flags.DEFINE_float('learning_rate', 0.0002, 'Learning rate')
 tf.app.flags.DEFINE_float('max_gradient_norm', 1.0, 'Clip gradients to this norm')
-tf.app.flags.DEFINE_integer('batch_size', 128, 'Batch size')
-tf.app.flags.DEFINE_integer('max_epochs', 0, 'Maximum # of training epochs')
+tf.app.flags.DEFINE_integer('batch_size', 5, 'Batch size')
+tf.app.flags.DEFINE_integer('max_epochs', 10000, 'Maximum # of training epochs')
 tf.app.flags.DEFINE_integer('max_load_batches', 20, 'Maximum # of batches to load at one time')
-tf.app.flags.DEFINE_integer('encoder_max_time_steps', 35, 'Maximum sequence length')
-tf.app.flags.DEFINE_integer('decoder_max_time_steps', 35, 'Maximum sequence length')
+tf.app.flags.DEFINE_integer('encoder_max_time_steps', 30, 'Maximum sequence length')
+tf.app.flags.DEFINE_integer('decoder_max_time_steps', 30, 'Maximum sequence length')
 tf.app.flags.DEFINE_integer('display_freq', 5, 'Display training status every this iteration')
 tf.app.flags.DEFINE_integer('save_freq', 1000, 'Save model checkpoint every this iteration')
 tf.app.flags.DEFINE_integer('valid_freq', 200, 'Evaluate model every this iteration: valid_data needed')
@@ -76,9 +77,20 @@ logging.basicConfig(level=logging_level, format=FLAGS.logger_format)
 logger = logging.getLogger(FLAGS.logger_name)
 
 
+def get_model_class():
+    model_class = FLAGS.model_class
+    class_map = {
+        'seq2seq': Seq2SeqModel,
+        'seq2seq_attention': Seq2SeqAttentionModel
+    }
+    assert model_class in class_map.keys()
+    return class_map[model_class]
+
+
 def create_model(session, FLAGS):
     config = FLAGS.flag_values_dict()
-    model = Model(config, 'inference', logger)
+    model_class = get_model_class()
+    model = model_class(config, 'train', logger)
     
     ckpt = tf.train.get_checkpoint_state(FLAGS.model_dir)
     if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):

@@ -64,9 +64,9 @@ def prepare_batch(seqs_x, x_max_length=None):
     batch_size = len(seqs_x)
     
     x_lengths = np.array(lengths_x)
-    maxlen_x = np.max(x_lengths)
+    max_x = x_max_length if x_max_length else np.max(x_lengths)
     
-    x = np.ones((batch_size, maxlen_x)).astype('int32') * end_token
+    x = np.ones((batch_size, max_x)).astype('int32') * end_token
     
     for idx, s_x in enumerate(seqs_x):
         x[idx, :lengths_x[idx]] = s_x
@@ -107,8 +107,8 @@ def prepare_pair_batch(seqs_x, seqs_y, x_max_length=None, y_max_length=None):
     x_lengths = np.array(lengths_x)
     y_lengths = np.array(lengths_y)
     
-    max_x = np.max(x_lengths)
-    max_y = np.max(y_lengths)
+    max_x = x_max_length if x_max_length else np.max(x_lengths)
+    max_y = y_max_length if y_max_length else np.max(y_lengths)
     
     x = np.ones((batch_size, max_x)).astype('int32') * end_token
     y = np.ones((batch_size, max_y)).astype('int32') * end_token

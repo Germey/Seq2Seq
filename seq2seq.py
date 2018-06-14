@@ -1,10 +1,14 @@
 import tensorflow as tf
+from tensorflow.contrib.seq2seq import dynamic_decode
+
 import data_utils
 import os
 import math
 import sys
 import time
 
+
+dynamic_decode()
 
 class Seq2SeqModel(object):
     def __init__(self, learning_rate, learning_rate_decay_factor, source_vocab_size=40000, target_vocab_size=40000, num_steps=3, num_epochs=10,
