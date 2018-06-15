@@ -386,9 +386,7 @@ class Seq2SeqModel():
             self.keep_prob.name: 1
         }
         
-        output_feed = [
-            self.decoder_outputs
-        ]
+        output_feed = self.outputs
         
         # self.decoder_probabilities,
         # self.decoder_predicts,

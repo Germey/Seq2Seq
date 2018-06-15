@@ -40,7 +40,7 @@ def seq2words(seq, inverse_target_dictionary):
             words.append(inverse_target_dictionary[w])
         else:
             words.append(UNK)
-    return ' '.join(words)
+    return ''.join(words)
 
 
 # batch preparation of a given sequence
