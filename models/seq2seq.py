@@ -55,6 +55,7 @@ class Seq2SeqModel():
         self.logger.debug('batch_size %s', self.batch_size)
         
         if self.mode == 'train':
+            
             # decoder_inputs: [batch_size, max_time_steps]
             self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, None],
                                                  name='decoder_inputs')
@@ -88,6 +89,17 @@ class Seq2SeqModel():
             # decoder_targets_length: [batch_size]
             self.decoder_targets_train_length = self.decoder_inputs_length + 1
             self.logger.debug('decoder_targets_train_length %s', self.decoder_targets_train_length)
+        
+        else:
+            self.decoder_inputs = tf.ones(shape=[self.batch_size, 1], dtype=tf.int32, name='decoder_inputs') * GO
+            self.logger.debug('decoder_inputs %s', self.decoder_inputs)
+            
+            self.decoder_inputs_inference = self.decoder_inputs
+            self.logger.debug('decoder_inputs_inference %s', self.decoder_inputs_inference)
+            
+            self.decoder_inputs_inference_length = tf.ones(shape=[self.batch_size], dtype=tf.int32,
+                                                           name='decoder_inputs_inference_length')
+            self.logger.debug('decoder_inputs_inference_length %s', self.decoder_inputs_inference_length)
     
     def build_single_cell(self):
         """
@@ -204,7 +216,7 @@ class Seq2SeqModel():
     
     def build_decoder(self):
         with tf.variable_scope('decoder'):
-            # decoder_initial_state: decoder_depth * [batch_size, hidden_units]
+            # decoder_initial_state: [batch_size, hidden_units]
             self.decoder_initial_state = self.encoder_last_state
             self.logger.debug('decoder_initial_state %s', self.decoder_initial_state)
             
@@ -233,27 +245,21 @@ class Seq2SeqModel():
                                                                                   inputs=self.decoder_inputs_embedded,
                                                                                   sequence_length=self.decoder_inputs_train_length,
                                                                                   dtype=self.dtype)
-                
-                # decoder_logits: [batch_size, decoder_time_steps, decoder_vocab_size]
-                self.decoder_logits = tf.layers.dense(inputs=self.decoder_outputs,
-                                                      units=self.decoder_vocab_size,
-                                                      name='decoder_logits', reuse=tf.AUTO_REUSE)
-                self.logger.debug('decoder_logits %s', self.decoder_logits)
-                
-                # decoder_masks: [batch_size, reduce_max(decoder_inputs_length)]
-                self.decoder_masks = tf.sequence_mask(lengths=self.decoder_inputs_train_length,
-                                                      maxlen=tf.reduce_max(self.decoder_targets_train_length),
-                                                      dtype=self.dtype,
-                                                      name='masks')
-                self.logger.debug('decoder_masks %s', self.decoder_masks)
-                
-                # loss
-                self.loss = tf.contrib.seq2seq.sequence_loss(logits=self.decoder_logits,
-                                                             targets=self.decoder_targets_train,
-                                                             weights=self.decoder_masks)
-                self.logger.debug('loss %s', self.loss)
             
             else:
+                # decoder_inputs_embedded: [batch_size, decoder_time_steps, embedding_size]
+                self.decoder_inputs_embedded = tf.nn.embedding_lookup(self.decoder_embeddings,
+                                                                      self.decoder_inputs_inference)
+                self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
+                
+                # decoder_outputs: [batch_size, decoder_time_steps, hidden_units]
+                # decoder_last_state: [batch_size, hidden_units]
+                self.decoder_outputs, self.decoder_last_state = tf.nn.dynamic_rnn(cell=self.decoder_cell,
+                                                                                  initial_state=self.decoder_initial_state,
+                                                                                  inputs=self.decoder_inputs_embedded,
+                                                                                  sequence_length=self.decoder_inputs_inference_length,
+                                                                                  dtype=self.dtype)
+                
                 # decoder_initial_tokens: [batch_size]
                 self.decoder_initial_tokens = tf.ones(shape=[self.batch_size], dtype=tf.int32,
                                                       name='initial_tokens') * GO
@@ -299,17 +305,49 @@ class Seq2SeqModel():
                     self.decoder_logits.append(logits)
                     self.decoder_probabilities.append(probabilities)
                     self.decoder_predicts.append(predicts)
-            
-            self.decoder_outputs = tf.stack(self.decoder_outputs, axis=1)
-            self.decoder_logits = tf.stack(self.decoder_logits, axis=1)
-            self.decoder_probabilities = tf.stack(self.decoder_probabilities, axis=1)
-            self.decoder_predicts = tf.stack(self.decoder_predicts, axis=1)
+                
+                self.decoder_outputs = tf.stack(self.decoder_outputs, axis=1)
+                self.decoder_logits = tf.stack(self.decoder_logits, axis=1)
+                self.decoder_probabilities = tf.stack(self.decoder_probabilities, axis=1)
+                self.decoder_predicts = tf.stack(self.decoder_predicts, axis=1)
+                
+                self.logger.debug('decoder_outputs %s', self.decoder_outputs)
+                self.logger.debug('decoder_logits %s', self.decoder_logits)
+                self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
+                self.logger.debug('decoder_predicts %s', self.decoder_predicts)
+                self.logger.debug('decoder_last_state %s', self.decoder_last_state)
             
             self.logger.debug('decoder_outputs %s', self.decoder_outputs)
-            self.logger.debug('decoder_logits %s', self.decoder_logits)
-            self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
-            self.logger.debug('decoder_predicts %s', self.decoder_predicts)
             self.logger.debug('decoder_last_state %s', self.decoder_last_state)
+            
+            # decoder_logits: [batch_size, decoder_time_steps, decoder_vocab_size]
+            self.decoder_logits = tf.layers.dense(inputs=self.decoder_outputs,
+                                                  units=self.decoder_vocab_size,
+                                                  name='decoder_logits', reuse=tf.AUTO_REUSE)
+            self.logger.debug('decoder_logits %s', self.decoder_logits)
+            
+            if self.mode == 'train':
+                # decoder_masks: [batch_size, reduce_max(decoder_inputs_length)]
+                self.decoder_masks = tf.sequence_mask(lengths=self.decoder_inputs_train_length,
+                                                      maxlen=tf.reduce_max(self.decoder_targets_train_length),
+                                                      dtype=self.dtype,
+                                                      name='masks')
+                self.logger.debug('decoder_masks %s', self.decoder_masks)
+                
+                # loss
+                self.loss = tf.contrib.seq2seq.sequence_loss(logits=self.decoder_logits,
+                                                             targets=self.decoder_targets_train,
+                                                             weights=self.decoder_masks)
+                self.logger.debug('loss %s', self.loss)
+            
+            else:
+                # decoder_probabilities: [batch_size, decoder_time_steps, decoder_vocab_size]
+                self.decoder_probabilities = tf.nn.softmax(self.decoder_logits, -1)
+                self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
+                
+                # decoder_predicts: [batch_size, decoder_time_steps]
+                self.decoder_predicts = tf.argmax(self.decoder_probabilities, -1)
+                self.logger.debug('decoder_predicts %s', self.decoder_predicts)
     
     def build_optimizer(self):
         if self.mode == 'train':
@@ -387,11 +425,8 @@ class Seq2SeqModel():
         }
         
         output_feed = [
-            self.decoder_outputs
+            self.decoder_probabilities,
+            self.decoder_predicts,
         ]
-        
-        # self.decoder_probabilities,
-        # self.decoder_predicts,
-        
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs

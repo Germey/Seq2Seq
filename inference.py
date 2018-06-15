@@ -84,7 +84,9 @@ def decode():
             
             print('Source', source[0], 'Source Len', source_len[0])
             
-            o = model.inference(sess, source, source_len)
+            probabilities, predicts = model.inference(sess, source, source_len)
+            
+            o = predicts
             
             print('O', o)
             print('O', o.shape)
