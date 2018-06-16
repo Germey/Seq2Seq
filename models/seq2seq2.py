@@ -268,6 +268,7 @@ class Seq2SeqModel():
                 self.decoder_logits = []
                 self.decoder_probabilities = []
                 self.decoder_predicts = []
+                self.decoder_scores = []
                 
                 # initial state and input
                 state = self.decoder_initial_state
@@ -288,9 +289,16 @@ class Seq2SeqModel():
                     logits = tf.layers.dense(inputs=output,
                                              units=self.decoder_vocab_size,
                                              name='decoder_logits', reuse=tf.AUTO_REUSE)
+                    # probability matrix
                     probabilities = tf.nn.softmax(logits, -1)
+                    
+                    # argmax index
                     predicts = tf.argmax(probabilities, -1)
                     
+                    # argmax probability score
+                    scores = tf.reduce_max(probabilities, -1)
+                    
+                    # next input
                     input = tf.nn.embedding_lookup(params=self.decoder_embeddings,
                                                    ids=predicts)
                     
@@ -299,17 +307,20 @@ class Seq2SeqModel():
                     self.decoder_logits.append(logits)
                     self.decoder_probabilities.append(probabilities)
                     self.decoder_predicts.append(predicts)
+                    self.decoder_scores.append(scores)
             
             self.decoder_outputs = tf.stack(self.decoder_outputs, axis=1)
             self.decoder_logits = tf.stack(self.decoder_logits, axis=1)
             self.decoder_probabilities = tf.stack(self.decoder_probabilities, axis=1)
             self.decoder_predicts = tf.stack(self.decoder_predicts, axis=1)
+            self.decoder_scores = tf.stack(self.decoder_scores, axis=1)
             
             self.logger.debug('decoder_outputs %s', self.decoder_outputs)
             self.logger.debug('decoder_logits %s', self.decoder_logits)
             self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
             self.logger.debug('decoder_predicts %s', self.decoder_predicts)
             self.logger.debug('decoder_last_state %s', self.decoder_last_state)
+            self.logger.debug('decoder_scores %s', self.decoder_scores)
     
     def build_optimizer(self):
         if self.mode == 'train':

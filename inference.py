@@ -10,7 +10,7 @@ from models.seq2seq import Seq2SeqModel
 
 # Decoding parameters
 tf.app.flags.DEFINE_integer('beam_width', 1, 'Beam width used in beam search')
-tf.app.flags.DEFINE_integer('inference_batch_size', 4, 'Batch size used for decoding')
+tf.app.flags.DEFINE_integer('inference_batch_size', 256, 'Batch size used for decoding')
 tf.app.flags.DEFINE_integer('max_inference_step', 60, 'Maximum time step limit to decode')
 tf.app.flags.DEFINE_string('model_path', 'checkpoints/couplet_seq2seq/couplet.ckpt-70000',
                            'Path to a specific model checkpoint.')
@@ -42,7 +42,7 @@ def load_config(FLAGS):
 def load_model(session, config):
     model = Seq2SeqModel(config, 'inference', logger)
     if tf.train.checkpoint_exists(FLAGS.model_path):
-        print('Reloading model parameters..')
+        logger.info('Reloading model parameters..')
         model.restore(session, FLAGS.model_path)
     else:
         raise ValueError(
@@ -72,9 +72,9 @@ def decode():
                                           gpu_options=tf.GPUOptions(allow_growth=True))) as sess:
         # Reload existing checkpoint
         model = load_model(sess, config)
-        print('Decoding {}..'.format(FLAGS.inference_input))
+        logger.info('Decoding %s...', FLAGS.inference_input)
         
-        fout = [open(FLAGS.inference_output, 'w')]
+        fout = open(FLAGS.inference_output, 'w')
         
         line_number = 0
         
@@ -82,25 +82,17 @@ def decode():
             source, source_len = prepare_batch(source_seq)
             line_number += len(source)
             
-            print('Source', source[0], 'Source Len', source_len[0])
+            predicts, scores = model.inference(sess, source, source_len)
             
-            probabilities, predicts = model.inference(sess, source, source_len)
-            
-            o = predicts
-            
-            print('O', o)
-            print('O', o.shape)
-            
-            # print(probs.shape)
-            for t, s in zip(o, source):
-                print('t', t)
-                t = seq2words(t, inverse_target_dictionary=target_inverse_dict)
-                s = seq2words(s, inverse_target_dictionary=target_inverse_dict)
-                print('s', s, 't', t)
-            # print(predicts.shape)
-            
-            # print(predicts[:5])
-            print(o[:5])
+            for predict_seq, score_seq in zip(predicts, scores):
+                result = seq2words(predict_seq, inverse_target_dictionary=target_inverse_dict)
+                logger.info('result %s', result)
+                fout.write(result + '\n')
+            logger.info('%s lines processed', line_number)
+        
+        fout.close()
+        
+        logger.info('Finished!')
 
 
 def main(_):
