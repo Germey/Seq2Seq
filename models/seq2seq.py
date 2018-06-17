@@ -5,7 +5,7 @@ from utils.config import GO, EOS
 
 class Seq2SeqModel():
     def __init__(self, config, mode, logger):
-        assert mode.lower() in ['train', 'inference']
+        assert mode.lower() in ['train', 'inference', 'debug']
         self.mode = mode.lower()
         self.logger = logger
         self.init_config(config)
@@ -121,7 +121,7 @@ class Seq2SeqModel():
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
     
     def build_encoder(self):
-        with tf.variable_scope('encoder'):
+        with tf.variable_scope('encoder') as scope:
             # encoder_embeddings: [encoder_vocab_size, embedding_size]
             self.encoder_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.encoder_vocab_size, self.embedding_size],
@@ -154,7 +154,8 @@ class Seq2SeqModel():
                                                                             cell_bw=cell_bw,
                                                                             inputs=self.encoder_inputs_embedded_dense,
                                                                             sequence_length=self.encoder_inputs_length,
-                                                                            dtype=self.dtype)
+                                                                            dtype=self.dtype,
+                                                                            scope=scope)
                 self.logger.debug('bi_outputs %s', bi_outputs)
                 self.logger.debug('bi_last_state %s', bi_last_state)
                 # concat bi outputs
@@ -175,7 +176,8 @@ class Seq2SeqModel():
                     # encoder depth >= 2
                     upper_outputs, upper_last_state = tf.nn.dynamic_rnn(cell=upper_cell, inputs=bi_outputs,
                                                                         sequence_length=self.encoder_inputs_length,
-                                                                        dtype=self.dtype)
+                                                                        dtype=self.dtype,
+                                                                        scope=scope)
                     self.logger.debug('upper_outputs %s', upper_outputs)
                     self.logger.debug('upper_last_state %s', upper_last_state)
                     
@@ -205,7 +207,7 @@ class Seq2SeqModel():
                 self.encoder_outputs, self.encoder_last_state = tf.nn.dynamic_rnn(cell=self.encoder_cell,
                                                                                   inputs=self.encoder_inputs_embedded_dense,
                                                                                   sequence_length=self.encoder_inputs_length,
-                                                                                  dtype=self.dtype)
+                                                                                  dtype=self.dtype, scope=scope)
                 self.logger.debug('encoder_outputs %s', self.encoder_outputs)
                 self.logger.debug('encoder_last_state %s', self.encoder_last_state)
     
@@ -215,7 +217,7 @@ class Seq2SeqModel():
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
     
     def build_decoder(self):
-        with tf.variable_scope('decoder'):
+        with tf.variable_scope('decoder') as scope:
             # decoder_initial_state: [batch_size, hidden_units]
             self.decoder_initial_state = self.encoder_last_state
             self.logger.debug('decoder_initial_state %s', self.decoder_initial_state)
@@ -244,7 +246,8 @@ class Seq2SeqModel():
                                                                                   initial_state=self.decoder_initial_state,
                                                                                   inputs=self.decoder_inputs_embedded,
                                                                                   sequence_length=self.decoder_inputs_train_length,
-                                                                                  dtype=self.dtype)
+                                                                                  dtype=self.dtype,
+                                                                                  scope=scope)
                 # decoder_logits: [batch_size, decoder_max_time_steps, decoder_vocab_size]
                 self.decoder_logits = tf.layers.dense(inputs=self.decoder_outputs,
                                                       units=self.decoder_vocab_size,
@@ -292,10 +295,9 @@ class Seq2SeqModel():
                     # decode one step
                     # input: [batch_size, embedding_size]
                     # state:
-                    with tf.variable_scope('rnn'):
-                        output, state = self.decoder_cell(
-                            inputs=input,
-                            state=state)
+                    output, state = self.decoder_cell(
+                        inputs=input,
+                        state=state)
                     
                     logits = tf.layers.dense(inputs=output,
                                              units=self.decoder_vocab_size,

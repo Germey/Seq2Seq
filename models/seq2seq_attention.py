@@ -139,7 +139,7 @@ class Seq2SeqAttentionModel():
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
     
     def build_encoder(self):
-        with tf.variable_scope('encoder'):
+        with tf.variable_scope('encoder') as scope:
             # encoder_embeddings: [encoder_vocab_size, embedding_size]
             self.encoder_embeddings = tf.get_variable(name='embedding',
                                                       shape=[self.encoder_vocab_size, self.embedding_size],
@@ -172,7 +172,8 @@ class Seq2SeqAttentionModel():
                                                                             cell_bw=cell_bw,
                                                                             inputs=self.encoder_inputs_embedded_dense,
                                                                             sequence_length=self.encoder_inputs_length,
-                                                                            dtype=self.dtype)
+                                                                            dtype=self.dtype,
+                                                                            scope=scope)
                 self.logger.debug('bi_outputs %s', bi_outputs)
                 self.logger.debug('bi_last_state %s', bi_last_state)
                 # concat bi outputs
@@ -193,7 +194,8 @@ class Seq2SeqAttentionModel():
                     # encoder depth >= 2
                     upper_outputs, upper_last_state = tf.nn.dynamic_rnn(cell=upper_cell, inputs=bi_outputs,
                                                                         sequence_length=self.encoder_inputs_length,
-                                                                        dtype=self.dtype)
+                                                                        dtype=self.dtype,
+                                                                        scope=scope)
                     self.logger.debug('upper_outputs %s', upper_outputs)
                     self.logger.debug('upper_last_state %s', upper_last_state)
                     
@@ -223,7 +225,8 @@ class Seq2SeqAttentionModel():
                 self.encoder_outputs, self.encoder_last_state = tf.nn.dynamic_rnn(cell=self.encoder_cell,
                                                                                   inputs=self.encoder_inputs_embedded_dense,
                                                                                   sequence_length=self.encoder_inputs_length,
-                                                                                  dtype=self.dtype)
+                                                                                  dtype=self.dtype,
+                                                                                  scope=scope)
                 self.logger.debug('encoder_outputs %s', self.encoder_outputs)
                 self.logger.debug('encoder_last_state %s', self.encoder_last_state)
     
@@ -273,7 +276,7 @@ class Seq2SeqAttentionModel():
         return c_i
     
     def build_decoder(self):
-        with tf.variable_scope('decoder'):
+        with tf.variable_scope('decoder') as scope:
             # decoder_initial_state: encoder_depth * [batch_size, hidden_units]
             self.decoder_initial_state = self.encoder_last_state
             self.logger.debug('decoder_initial_state %s', self.decoder_initial_state)
@@ -305,7 +308,8 @@ class Seq2SeqAttentionModel():
                 
                 # decoder_inputs_embedded_unstack: decoder_time_steps * [batch_size, embedding_size]
                 self.decoder_inputs_embedded_unstack = tf.unstack(self.decoder_inputs_embedded, axis=1)
-                self.logger.debug('decoder_inputs_embedded_unstack %s sample %s', len(self.decoder_inputs_embedded_unstack),
+                self.logger.debug('decoder_inputs_embedded_unstack %s sample %s',
+                                  len(self.decoder_inputs_embedded_unstack),
                                   self.decoder_inputs_embedded_unstack[0])
                 
                 self.logger.debug('encoder_outputs_unstack length %s sample %s',
@@ -325,39 +329,13 @@ class Seq2SeqAttentionModel():
                 # decoder_depth * [batch_size, hidden_units]
                 self.decoder_last_state = state
                 self.logger.debug('decoder_last_state %s', self.decoder_last_state)
-            
-            else:
                 
-                # decoder_inputs_embedded: [batch_size, decoder_max_time_steps, embedding_size]
-                self.decoder_inputs_embedded = tf.nn.embedding_lookup(self.decoder_embeddings,
-                                                                      self.decoder_inputs_inference)
-                self.logger.debug('decoder_inputs_embedded %s', self.decoder_inputs_embedded)
+                # decoder_logits: [batch_size, decoder_max_time_steps, decoder_vocab_size]
+                self.decoder_logits = tf.layers.dense(inputs=self.decoder_outputs,
+                                                      units=self.decoder_vocab_size,
+                                                      name='decoder_logits')
+                self.logger.debug('decoder_logits %s', self.decoder_logits)
                 
-                # decoder_inputs_embedded_unstack: decoder_time_steps * [batch_size, embedding_size]
-                self.decoder_inputs_embedded_unstack = tf.unstack(self.decoder_inputs_embedded, axis=1)
-                self.logger.debug('decoder_inputs_embedded_unstack %s', self.decoder_inputs_embedded_unstack)
-                
-                inputs = self.decoder_inputs_embedded_unstack[0]
-                
-                c_i = self.attention(state[-1], encoder_outputs=self.encoder_outputs_unstack)
-                inputs = tf.concat([inputs, c_i], axis=1)
-                outputs, state = self.decoder_cell(inputs=inputs, state=state)
-                
-                # decoder_outputs: [batch_size, decoder_time_steps, hidden_units]
-                self.decoder_outputs = tf.stack([outputs], axis=1)
-                self.logger.debug('decoder_outputs %s', self.decoder_outputs)
-                
-                # decoder_depth * [batch_size, hidden_units]
-                self.decoder_last_state = state
-                self.logger.debug('decoder_last_state %s', self.decoder_last_state)
-            
-            # decoder_logits: [batch_size, decoder_max_time_steps, decoder_vocab_size]
-            self.decoder_logits = tf.layers.dense(inputs=self.decoder_outputs,
-                                                  units=self.decoder_vocab_size,
-                                                  name='decoder_logits')
-            self.logger.debug('decoder_logits %s', self.decoder_logits)
-            
-            if self.mode == 'train':
                 # decoder_masks: [batch_size, reduce_max(decoder_inputs_length)]
                 self.decoder_masks = tf.sequence_mask(lengths=self.decoder_inputs_train_length,
                                                       maxlen=self.decoder_max_time_steps + 1,
@@ -370,15 +348,72 @@ class Seq2SeqAttentionModel():
                                                              targets=self.decoder_targets_train,
                                                              weights=self.decoder_masks)
                 self.logger.debug('loss %s', self.loss)
-            
             else:
-                # decoder_probabilities: [batch_size, decoder_max_time_steps, decoder_vocab_size]
-                self.decoder_probabilities = tf.nn.softmax(self.decoder_logits, -1)
-                self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
                 
-                # decoder_predicts: [batch_size, decoder_max_time_steps]
-                self.decoder_predicts = tf.argmax(self.decoder_probabilities, -1)
+                # decoder_initial_tokens: [batch_size]
+                self.decoder_initial_tokens = tf.ones(shape=[self.batch_size], dtype=tf.int32,
+                                                      name='initial_tokens') * GO
+                self.logger.debug('decoder_initial_tokens %s', self.decoder_initial_tokens)
+                
+                # decoder_initial_tokens_embedded: [batch_size, embedding_size]
+                self.decoder_initial_tokens_embedded = tf.nn.embedding_lookup(params=self.decoder_embeddings,
+                                                                              ids=self.decoder_initial_tokens)
+                self.logger.debug('decoder_initial_tokens_embedded %s', self.decoder_initial_tokens_embedded)
+                
+                self.decoder_outputs = []
+                self.decoder_logits = []
+                self.decoder_probabilities = []
+                self.decoder_predicts = []
+                self.decoder_scores = []
+                
+                # initial state and input
+                state = self.decoder_initial_state
+                # input: [batch_size, embedding_size]
+                input = self.decoder_initial_tokens_embedded
+                
+                # decoder loop
+                for _ in range(self.decoder_max_time_steps):
+                    # decode one step
+                    # input: [batch_size, embedding_size]
+                    # state:
+                    output, state = self.decoder_cell(
+                        inputs=input,
+                        state=state)
+                    
+                    logits = tf.layers.dense(inputs=output,
+                                             units=self.decoder_vocab_size,
+                                             name='decoder_logits', reuse=tf.AUTO_REUSE)
+                    # probability matrix
+                    probabilities = tf.nn.softmax(logits, -1)
+                    
+                    # argmax index
+                    predicts = tf.argmax(probabilities, -1)
+                    
+                    # argmax probability score
+                    scores = tf.reduce_max(probabilities, -1)
+                    
+                    # next input
+                    input = tf.nn.embedding_lookup(params=self.decoder_embeddings,
+                                                   ids=predicts)
+                    
+                    self.decoder_last_state = state
+                    self.decoder_outputs.append(output)
+                    self.decoder_logits.append(logits)
+                    self.decoder_probabilities.append(probabilities)
+                    self.decoder_predicts.append(predicts)
+                    self.decoder_scores.append(scores)
+                
+                self.decoder_outputs = tf.stack(self.decoder_outputs, axis=1)
+                self.decoder_logits = tf.stack(self.decoder_logits, axis=1)
+                self.decoder_probabilities = tf.stack(self.decoder_probabilities, axis=1)
+                self.decoder_predicts = tf.stack(self.decoder_predicts, axis=1)
+                self.decoder_scores = tf.stack(self.decoder_scores, axis=1)
+                
+                self.logger.debug('decoder_logits %s', self.decoder_logits)
+                self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
                 self.logger.debug('decoder_predicts %s', self.decoder_predicts)
+                self.logger.debug('decoder_last_state %s', self.decoder_last_state)
+                self.logger.debug('decoder_scores %s', self.decoder_scores)
     
     def build_optimizer(self):
         if self.mode == 'train':
