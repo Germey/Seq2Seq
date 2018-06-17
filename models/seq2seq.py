@@ -284,6 +284,7 @@ class Seq2SeqModel():
                 
                 # decoder_masks: [batch_size, reduce_max(decoder_inputs_length)]
                 self.decoder_masks = tf.sequence_mask(lengths=self.decoder_inputs_train_length,
+                                                      # add go symbol length
                                                       maxlen=self.decoder_max_time_steps + 1,
                                                       dtype=self.dtype,
                                                       name='masks')
