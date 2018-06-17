@@ -5,6 +5,12 @@ from utils.config import GO, EOS
 
 class Seq2SeqAttentionModel():
     def __init__(self, config, mode, logger):
+        """
+        init model
+        :param config: config dict
+        :param mode: train or inference
+        :param logger: logger object
+        """
         assert mode.lower() in ['train', 'inference']
         self.mode = mode.lower()
         self.logger = logger
@@ -15,6 +21,11 @@ class Seq2SeqAttentionModel():
         self.build_optimizer()
     
     def init_config(self, config):
+        """
+        add config to model
+        :param config: config dict
+        :return: None
+        """
         self.config = config
         self.hidden_units = config['hidden_units']
         self.embedding_size = config['embedding_size']
@@ -38,7 +49,10 @@ class Seq2SeqAttentionModel():
         self.global_epoch_step_op = tf.assign(self.global_epoch_step, tf.add(self.global_epoch_step, 1))
     
     def build_placeholders(self):
-        
+        """
+        init placeholders
+        :return: None
+        """
         self.keep_prob = tf.placeholder(self.dtype, shape=[], name='keep_prob')
         
         # encoder_inputs: [batch_size, encoder_time_steps]
@@ -132,13 +146,28 @@ class Seq2SeqAttentionModel():
     def build_encoder_cell(self, depth=None):
         """
         build encoder multi cell
+        :param depth: encoder depth
         :return: MultiRNNCell
         """
         depth = depth if depth else self.encoder_depth
         cells = [self.build_single_cell() for _ in range(depth)]
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
     
+    def build_decoder_cell(self, depth=None):
+        """
+        build decoder multi cell
+        :param depth: decoder depth
+        :return: MultiRNNCell
+        """
+        depth = depth if depth else self.decoder_depth
+        cells = [self.build_single_cell() for _ in range(depth)]
+        return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
+    
     def build_encoder(self):
+        """
+        build encoder
+        :return: None
+        """
         with tf.variable_scope('encoder') as scope:
             # encoder_embeddings: [encoder_vocab_size, embedding_size]
             self.encoder_embeddings = tf.get_variable(name='embedding',
@@ -230,12 +259,13 @@ class Seq2SeqAttentionModel():
                 self.logger.debug('encoder_outputs %s', self.encoder_outputs)
                 self.logger.debug('encoder_last_state %s', self.encoder_last_state)
     
-    def build_decoder_cell(self, depth=None):
-        depth = depth if depth else self.decoder_depth
-        cells = [self.build_single_cell() for _ in range(depth)]
-        return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
-    
     def attention(self, prev_state, encoder_outputs):
+        """
+        calculate attention result
+        :param prev_state: prev state
+        :param encoder_outputs: encoder outputs
+        :return: attention result
+        """
         e_i = []
         c_i = []
         # encoder_outputs: encoder_time_steps * [batch_size, hidden_units]
@@ -276,7 +306,11 @@ class Seq2SeqAttentionModel():
         return c_i
     
     def build_decoder(self):
-        with tf.variable_scope('decoder') as scope:
+        """
+        build decoder
+        :return:
+        """
+        with tf.variable_scope('decoder'):
             # decoder_initial_state: encoder_depth * [batch_size, hidden_units]
             self.decoder_initial_state = self.encoder_last_state
             self.logger.debug('decoder_initial_state %s', self.decoder_initial_state)
@@ -416,6 +450,10 @@ class Seq2SeqAttentionModel():
                 self.logger.debug('decoder_scores %s', self.decoder_scores)
     
     def build_optimizer(self):
+        """
+        build optimizer
+        :return: None
+        """
         if self.mode == 'train':
             self.logger.info('Setting optimizer...')
             
@@ -438,6 +476,14 @@ class Seq2SeqAttentionModel():
                                                            global_step=self.global_step)
     
     def save(self, sess, save_path, var_list=None, global_step=None):
+        """
+        save model to ckpt
+        :param sess: session object
+        :param save_path: save path
+        :param var_list: variables list
+        :param global_step: global step
+        :return: None
+        """
         saver = tf.train.Saver(var_list)
         
         # save model
@@ -445,13 +491,28 @@ class Seq2SeqAttentionModel():
         self.logger.info('model saved at %s', save_path)
     
     def restore(self, sess, save_path, var_list=None):
+        """
+        restore model from ckpt
+        :param sess: session object
+        :param save_path: save path
+        :param var_list: variables list
+        :return: None
+        """
         saver = tf.train.Saver(var_list)
         saver.restore(sess=sess, save_path=save_path)
         self.logger.info('model restored from %s', save_path)
     
     def train(self, sess, encoder_inputs, encoder_inputs_length,
               decoder_inputs, decoder_inputs_length):
-        
+        """
+        train process
+        :param sess: session object
+        :param encoder_inputs:
+        :param encoder_inputs_length:
+        :param decoder_inputs:
+        :param decoder_inputs_length:
+        :return: None
+        """
         input_feed = {
             self.encoder_inputs.name: encoder_inputs,
             self.encoder_inputs_length.name: encoder_inputs_length,
@@ -469,7 +530,15 @@ class Seq2SeqAttentionModel():
     
     def eval(self, sess, encoder_inputs, encoder_inputs_length,
              decoder_inputs, decoder_inputs_length):
-        
+        """
+        eval process
+        :param sess: session object
+        :param encoder_inputs:
+        :param encoder_inputs_length:
+        :param decoder_inputs:
+        :param decoder_inputs_length:
+        :return: None
+        """
         input_feed = {
             self.encoder_inputs.name: encoder_inputs,
             self.encoder_inputs_length.name: encoder_inputs_length,
@@ -484,6 +553,13 @@ class Seq2SeqAttentionModel():
         return outputs
     
     def inference(self, sess, encoder_inputs, encoder_inputs_length):
+        """
+        inference process
+        :param sess: session object
+        :param encoder_inputs:
+        :param encoder_inputs_length:
+        :return: None
+        """
         input_feed = {
             self.encoder_inputs.name: encoder_inputs,
             self.encoder_inputs_length.name: encoder_inputs_length,
@@ -491,9 +567,8 @@ class Seq2SeqAttentionModel():
         }
         
         output_feed = [
-            self.decoder_probabilities,
             self.decoder_predicts,
-            self.decoder_last_state
+            self.decoder_scores,
         ]
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs

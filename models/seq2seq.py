@@ -5,7 +5,13 @@ from utils.config import GO, EOS
 
 class Seq2SeqModel():
     def __init__(self, config, mode, logger):
-        assert mode.lower() in ['train', 'inference', 'debug']
+        """
+        init model
+        :param config: config dict
+        :param mode: train or inference
+        :param logger: logger object
+        """
+        assert mode.lower() in ['train', 'inference']
         self.mode = mode.lower()
         self.logger = logger
         self.init_config(config)
@@ -15,6 +21,11 @@ class Seq2SeqModel():
         self.build_optimizer()
     
     def init_config(self, config):
+        """
+        add config to model
+        :param config: config dict
+        :return: None
+        """
         self.config = config
         self.hidden_units = config['hidden_units']
         self.embedding_size = config['embedding_size']
@@ -37,7 +48,10 @@ class Seq2SeqModel():
         self.global_epoch_step_op = tf.assign(self.global_epoch_step, tf.add(self.global_epoch_step, 1))
     
     def build_placeholders(self):
-        
+        """
+        init placeholders
+        :return: None
+        """
         self.keep_prob = tf.placeholder(self.dtype, shape=[], name='keep_prob')
         
         # encoder_inputs: [batch_size, max_time_steps]
@@ -114,13 +128,28 @@ class Seq2SeqModel():
     def build_encoder_cell(self, depth=None):
         """
         build encoder multi cell
+        :param depth: encoder depth
         :return: MultiRNNCell
         """
         depth = depth if depth else self.encoder_depth
         cells = [self.build_single_cell() for _ in range(depth)]
         return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
     
+    def build_decoder_cell(self, depth=None):
+        """
+        build decoder multi cell
+        :param depth: decoder depth
+        :return: MultiRNNCell
+        """
+        depth = depth if depth else self.decoder_depth
+        cells = [self.build_single_cell() for _ in range(depth)]
+        return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
+    
     def build_encoder(self):
+        """
+        build encoder
+        :return: None
+        """
         with tf.variable_scope('encoder') as scope:
             # encoder_embeddings: [encoder_vocab_size, embedding_size]
             self.encoder_embeddings = tf.get_variable(name='embedding',
@@ -211,12 +240,11 @@ class Seq2SeqModel():
                 self.logger.debug('encoder_outputs %s', self.encoder_outputs)
                 self.logger.debug('encoder_last_state %s', self.encoder_last_state)
     
-    def build_decoder_cell(self, depth=None):
-        depth = depth if depth else self.decoder_depth
-        cells = [self.build_single_cell() for _ in range(depth)]
-        return tf.nn.rnn_cell.MultiRNNCell(cells=cells)
-    
     def build_decoder(self):
+        """
+        build decoder
+        :return: None
+        """
         with tf.variable_scope('decoder') as scope:
             # decoder_initial_state: [batch_size, hidden_units]
             self.decoder_initial_state = self.encoder_last_state
@@ -335,6 +363,10 @@ class Seq2SeqModel():
                 self.logger.debug('decoder_scores %s', self.decoder_scores)
     
     def build_optimizer(self):
+        """
+        build optimizer
+        :return: None
+        """
         if self.mode == 'train':
             self.logger.info('Setting optimizer...')
             
@@ -357,6 +389,14 @@ class Seq2SeqModel():
                                                            global_step=self.global_step)
     
     def save(self, sess, save_path, var_list=None, global_step=None):
+        """
+        save model to ckpt
+        :param sess: session object
+        :param save_path: save path
+        :param var_list: variables list
+        :param global_step: global step
+        :return: None
+        """
         saver = tf.train.Saver(var_list)
         
         # save model
@@ -364,13 +404,28 @@ class Seq2SeqModel():
         self.logger.info('model saved at %s', save_path)
     
     def restore(self, sess, save_path, var_list=None):
+        """
+        restore model from ckpt
+        :param sess: session object
+        :param save_path: save path
+        :param var_list: variables list
+        :return: None
+        """
         saver = tf.train.Saver(var_list)
         saver.restore(sess=sess, save_path=save_path)
         self.logger.info('model restored from %s', save_path)
     
     def train(self, sess, encoder_inputs, encoder_inputs_length,
               decoder_inputs, decoder_inputs_length):
-        
+        """
+        train process
+        :param sess: session object
+        :param encoder_inputs:
+        :param encoder_inputs_length:
+        :param decoder_inputs:
+        :param decoder_inputs_length:
+        :return: None
+        """
         input_feed = {
             self.encoder_inputs.name: encoder_inputs,
             self.encoder_inputs_length.name: encoder_inputs_length,
@@ -388,7 +443,15 @@ class Seq2SeqModel():
     
     def eval(self, sess, encoder_inputs, encoder_inputs_length,
              decoder_inputs, decoder_inputs_length):
-        
+        """
+        eval process
+        :param sess: session object
+        :param encoder_inputs:
+        :param encoder_inputs_length:
+        :param decoder_inputs:
+        :param decoder_inputs_length:
+        :return: None
+        """
         input_feed = {
             self.encoder_inputs.name: encoder_inputs,
             self.encoder_inputs_length.name: encoder_inputs_length,
@@ -403,6 +466,13 @@ class Seq2SeqModel():
         return outputs
     
     def inference(self, sess, encoder_inputs, encoder_inputs_length):
+        """
+        inference process
+        :param sess: session object
+        :param encoder_inputs:
+        :param encoder_inputs_length:
+        :return: None
+        """
         input_feed = {
             self.encoder_inputs.name: encoder_inputs,
             self.encoder_inputs_length.name: encoder_inputs_length,
