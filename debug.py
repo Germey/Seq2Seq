@@ -75,9 +75,9 @@ logger = logging.getLogger(FLAGS.logger_name)
 config = FLAGS.flag_values_dict()
 mode = 'inference'
 
-from models.seq2seq import Seq2SeqModel
+from models.seq2seq_attention import Seq2SeqAttentionModel
 
-model = Seq2SeqModel(mode=mode, config=config, logger=logger)
+model = Seq2SeqAttentionModel(mode=mode, config=config, logger=logger)
 
 for variable in tf.trainable_variables():
     print(variable)
