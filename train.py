@@ -7,7 +7,7 @@ import json
 import numpy as np
 import tensorflow as tf
 from os.path import join
-from utils.iterator import TrainTextIterator
+from utils.iterator import TrainTextIterator, ExtendTextIterator
 from models import *
 from tqdm import tqdm
 from utils.funcs import prepare_pair_batch, get_summary
@@ -54,7 +54,7 @@ tf.app.flags.DEFINE_integer('encoder_max_time_steps', 30, 'Maximum sequence leng
 tf.app.flags.DEFINE_integer('decoder_max_time_steps', 30, 'Maximum sequence length')
 tf.app.flags.DEFINE_integer('display_freq', 5, 'Display training status every this iteration')
 tf.app.flags.DEFINE_integer('save_freq', 1000, 'Save model checkpoint every this iteration')
-tf.app.flags.DEFINE_integer('valid_freq', 200, 'Evaluate model every this iteration: valid_data needed')
+tf.app.flags.DEFINE_integer('valid_freq', 20, 'Evaluate model every this iteration: valid_data needed')
 tf.app.flags.DEFINE_string('optimizer_type', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop)')
 tf.app.flags.DEFINE_string('model_dir', 'checkpoints/couplet', 'Path to save model checkpoints')
 tf.app.flags.DEFINE_string('model_name', 'model.ckpt', 'File name used for model checkpoints')
@@ -81,7 +81,8 @@ def get_model_class():
     model_class = FLAGS.model_class
     class_map = {
         'seq2seq': Seq2SeqModel,
-        'seq2seq_attention': Seq2SeqAttentionModel
+        'seq2seq_attention': Seq2SeqAttentionModel,
+        'pointer_generator': PointerGeneratorModel
     }
     assert model_class in class_map.keys()
     return class_map[model_class]
@@ -123,6 +124,18 @@ def train():
                                   split_sign=FLAGS.split_sign,
                                   max_length=None,
                                   )
+    if FLAGS.model_class == 'pointer_generator':
+        train_set = ExtendTextIterator(source=FLAGS.source_train_data,
+                                       target=FLAGS.target_train_data,
+                                       source_dict=FLAGS.source_vocabulary,
+                                       target_dict=FLAGS.target_vocabulary,
+                                       batch_size=FLAGS.batch_size,
+                                       n_words_source=FLAGS.encoder_vocab_size,
+                                       n_words_target=FLAGS.decoder_vocab_size,
+                                       sort_by_length=FLAGS.sort_by_length,
+                                       split_sign=FLAGS.split_sign,
+                                       max_length=None,
+                                       )
     
     if FLAGS.source_valid_data and FLAGS.target_valid_data:
         logger.info('Loading validation data...')
@@ -137,6 +150,18 @@ def train():
                                       split_sign=FLAGS.split_sign,
                                       max_length=None
                                       )
+        if FLAGS.model_class == 'pointer_generator':
+            valid_set = ExtendTextIterator(source=FLAGS.source_valid_data,
+                                           target=FLAGS.target_valid_data,
+                                           source_dict=FLAGS.source_vocabulary,
+                                           target_dict=FLAGS.target_vocabulary,
+                                           batch_size=FLAGS.batch_size,
+                                           n_words_source=FLAGS.encoder_vocab_size,
+                                           n_words_target=FLAGS.decoder_vocab_size,
+                                           sort_by_length=FLAGS.sort_by_length,
+                                           split_sign=FLAGS.split_sign,
+                                           max_length=None
+                                           )
     else:
         valid_set = None
     
@@ -169,19 +194,50 @@ def train():
             
             with tqdm(total=train_set.length()) as pbar:
                 
-                for source_seq, target_seq in train_set.next():
+                for batch in train_set.next():
                     
-                    # Get a batch from training parallel data
-                    source, source_len, target, target_len = prepare_pair_batch(source_seq, target_seq,
-                                                                                FLAGS.encoder_max_time_steps,
-                                                                                FLAGS.decoder_max_time_steps)
-                    logger.info('Training batch data shape %s, %s', source.shape, target.shape)
+                    if FLAGS.model_class == 'pointer_generator':
+                        source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = batch
+                        
+                        # Get a batch from training parallel data
+                        source, source_len, target, target_len = prepare_pair_batch(
+                            source_batch, target_batch,
+                            FLAGS.encoder_max_time_steps,
+                            FLAGS.decoder_max_time_steps)
+                        
+                        # Get a batch from training parallel data
+                        source_extend, _, target_extend, _ = prepare_pair_batch(
+                            source_extend_batch, target_extend_batch,
+                            FLAGS.encoder_max_time_steps,
+                            FLAGS.decoder_max_time_steps)
+                        logger.info('Training batch data shape %s, %s, %s, %s', source.shape, target.shape,
+                                    source_extend.shape, target_extend.shape)
+                        processed_number += len(source_batch)
+                        
+                        # Execute a single training step
+                        step_loss, _ = model.train(sess, encoder_inputs=source,
+                                                   encoder_inputs_extend=source_extend,
+                                                   encoder_inputs_length=source_len,
+                                                   decoder_inputs=target,
+                                                   decoder_inputs_extend=target_extend,
+                                                   decoder_inputs_length=target_len,
+                                                   oovs_max_size=oovs_max_size
+                                                   )
                     
-                    processed_number += len(source_seq)
-                    
-                    # Execute a single training step
-                    step_loss, _, = model.train(sess, encoder_inputs=source, encoder_inputs_length=source_len,
-                                                decoder_inputs=target, decoder_inputs_length=target_len)
+                    else:
+                        source_batch, target_batch = batch
+                        
+                        # Get a batch from training parallel data
+                        source, source_len, target, target_len = prepare_pair_batch(source_batch, target_batch,
+                                                                                    FLAGS.encoder_max_time_steps,
+                                                                                    FLAGS.decoder_max_time_steps)
+                        logger.info('Training batch data shape %s, %s', source.shape, target.shape)
+                        
+                        processed_number += len(source_batch)
+                        
+                        # Execute a single training step
+                        step_loss, _ = model.train(sess, encoder_inputs=source, encoder_inputs_length=source_len,
+                                                   decoder_inputs=target, decoder_inputs_length=target_len)
                     
                     loss += float(step_loss) / FLAGS.display_freq
                     
@@ -231,18 +287,52 @@ def train():
                         
                         valid_set.reset()
                         
-                        for source_seq, target_seq in valid_set.next():
-                            # Get a batch from validation parallel data
-                            source, source_len, target, target_len = prepare_pair_batch(source_seq, target_seq,
-                                                                                        FLAGS.encoder_max_time_steps,
-                                                                                        FLAGS.decoder_max_time_steps)
+                        for batch in valid_set.next():
                             
-                            logger.info('Validate batch data shape %s, %s', source.shape, target.shape)
+                            if FLAGS.model_class == 'pointer_generator':
+                                source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = batch
+                                
+                                # Get a batch from training parallel data
+                                source, source_len, target, target_len = prepare_pair_batch(
+                                    source_batch, target_batch,
+                                    FLAGS.encoder_max_time_steps,
+                                    FLAGS.decoder_max_time_steps)
+                                
+                                # Get a batch from training parallel data
+                                source_extend, _, target_extend, _ = prepare_pair_batch(
+                                    source_extend_batch, target_extend_batch,
+                                    FLAGS.encoder_max_time_steps,
+                                    FLAGS.decoder_max_time_steps)
+                                logger.info('Training batch data shape %s, %s, %s, %s', source.shape, target.shape,
+                                            source_extend.shape, target_extend.shape)
+                                processed_number += len(source_batch)
+                                
+                                # Execute a single training step
+                                step_loss = model.eval(sess, encoder_inputs=source,
+                                                       encoder_inputs_extend=source_extend,
+                                                       encoder_inputs_length=source_len,
+                                                       decoder_inputs=target,
+                                                       decoder_inputs_extend=target_extend,
+                                                       decoder_inputs_length=target_len,
+                                                       oovs_max_size=oovs_max_size
+                                                       )
                             
-                            # Compute validation loss: average per word cross entropy loss
-                            step_loss = model.eval(sess, encoder_inputs=source,
-                                                   encoder_inputs_length=source_len,
-                                                   decoder_inputs=target, decoder_inputs_length=target_len)
+                            else:
+                                source_batch, target_batch = batch
+                                
+                                # Get a batch from training parallel data
+                                source, source_len, target, target_len = prepare_pair_batch(source_batch, target_batch,
+                                                                                            FLAGS.encoder_max_time_steps,
+                                                                                            FLAGS.decoder_max_time_steps)
+                                logger.info('Training batch data shape %s, %s', source.shape, target.shape)
+                                
+                                processed_number += len(source_batch)
+                                
+                                # Execute a single training step
+                                step_loss = model.eval(sess, encoder_inputs=source,
+                                                       encoder_inputs_length=source_len,
+                                                       decoder_inputs=target, decoder_inputs_length=target_len)
+                            
                             batch_size = source.shape[0]
                             
                             valid_loss += step_loss * batch_size
