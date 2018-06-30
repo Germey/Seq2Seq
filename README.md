@@ -27,4 +27,6 @@ screen -t lcsts_word_seq2seq -S lcsts_word_seq2seq -L
 CUDA_VISIBLE_DEVICES=3 sh lcsts_word_seq2seq.sh
 screen -t lcsts_char_seq2seq_attention -S lcsts_char_seq2seq_attention -L
 CUDA_VISIBLE_DEVICES=0 sh lcsts_char_seq2seq_attention.sh
+screen -t lcsts_word_pointer_generator_coverage -S lcsts_word_pointer_generator_coverage -L
+CUDA_VISIBLE_DEVICES=3 sh lcsts_word_pointer_generator_coverage.sh
 ```
