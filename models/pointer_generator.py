@@ -426,27 +426,35 @@ class PointerGeneratorModel():
                 # self.predicts = tf.argmax(self.config)
                 
                 losses_group = []
+                
                 for decoder_step in range(self.decoder_max_time_steps + 1):
+                    # step_final_distribution: [batch_size, decoder_vocab_size + oovs_max_size]
                     step_final_distribution = decoder_logits[decoder_step]
+                    # targets: [batch_size]
                     targets = self.decoder_targets_train[:, decoder_step]
+                    # indices: [batch_size, 2]
                     indices = tf.stack((tf.range(0, self.batch_size), targets), axis=1)
                     self.logger.debug('indices %s', indices)
+                    # step_final_probabilities: [batch_size]
                     step_final_probabilities = tf.gather_nd(step_final_distribution, indices)
+                    # step_losses: [batch_size]
                     step_losses = -tf.log(step_final_probabilities)
                     self.logger.debug('step_losses %s', step_losses)
+                    # losses_group: (decoder_max_time_steps + 1) * [batch_size]
                     losses_group.append(step_losses)
                 
-                # self.logger.debug('losses_group', losses_group)
-                
+                # decoder_masked_length: [batch_size]
                 decoder_masked_length = tf.reduce_sum(self.decoder_masks, axis=1)
                 self.logger.debug('decoder_masked_length %s', decoder_masked_length)
-                
+                # masked_losses: (decoder_max_time_steps + 1) * [batch_size]
                 masked_losses = [v * self.decoder_masks[:, decoder_step] for decoder_step, v in enumerate(losses_group)]
                 self.logger.debug('masked_losses %s', masked_losses)
                 
+                # merged_losses: [batch_size]
                 merged_losses = sum(masked_losses) / decoder_masked_length
                 self.logger.debug('merged_losses %s', merged_losses)
                 
+                # loss: []
                 self.loss = tf.reduce_mean(merged_losses)
                 self.logger.debug('loss %s', self.loss)
             
