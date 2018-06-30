@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 
-from models import DebugPointerGeneratorModel
+from models import DebugPointerGeneratorCoverageModel
 from utils.funcs import prepare_pair_batch
 from utils.iterator import ExtendTextIterator
 
@@ -45,6 +45,7 @@ tf.app.flags.DEFINE_integer('max_epochs', 10000, 'Maximum # of training epochs')
 tf.app.flags.DEFINE_integer('max_load_batches', 20, 'Maximum # of batches to load at one time')
 tf.app.flags.DEFINE_integer('encoder_max_time_steps', 30, 'Maximum sequence length')
 tf.app.flags.DEFINE_integer('decoder_max_time_steps', 30, 'Maximum sequence length')
+tf.app.flags.DEFINE_float('coverage_loss_weight', 1.0, 'Coverage loss weight')
 tf.app.flags.DEFINE_integer('display_freq', 5, 'Display training status every this iteration')
 tf.app.flags.DEFINE_integer('save_freq', 1000, 'Save model checkpoint every this iteration')
 tf.app.flags.DEFINE_integer('valid_freq', 200, 'Evaluate model every this iteration: valid_data needed')
@@ -127,4 +128,4 @@ data = {
     'oovs_max_size': oovs_max_size
 }
 
-model = DebugPointerGeneratorModel(mode=mode, config=config, logger=logger, data=data)
+model = DebugPointerGeneratorCoverageModel(mode=mode, config=config, logger=logger, data=data)

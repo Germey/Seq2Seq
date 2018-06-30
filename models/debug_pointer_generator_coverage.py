@@ -1,10 +1,9 @@
 import tensorflow as tf
-
 import math
 from utils.config import GO, EOS
 
 
-class DebugPointerGeneratorModel():
+class DebugPointerGeneratorCoverageModel():
     def __init__(self, config, mode, logger, data):
         """
         init model
@@ -50,6 +49,7 @@ class DebugPointerGeneratorModel():
         self.global_epoch_step = tf.get_variable(trainable=False, name='global_epoch_step', initializer=tf.constant(0))
         self.global_epoch_step_op = tf.assign(self.global_epoch_step, tf.add(self.global_epoch_step, 1))
         self.batch_size = config['batch_size']
+        self.coverage_loss_weight = config['coverage_loss_weight']
     
     def build_placeholders(self):
         """
@@ -147,6 +147,11 @@ class DebugPointerGeneratorModel():
             self.attention_w = tf.get_variable(name='w', shape=[self.hidden_units, self.attention_units],
                                                initializer=tf.truncated_normal_initializer)
             self.logger.debug('attention_w %s', self.attention_w)
+            
+            # attention_c: [hidden_units, attention_units]
+            self.attention_c = tf.get_variable(name='c', shape=[self.hidden_units, self.attention_units],
+                                               initializer=tf.truncated_normal_initializer)
+            self.logger.debug('attention_c %s', self.attention_c)
             
             # attention_v: [attention_units, 1]
             self.attention_v = tf.get_variable(name='v', shape=[self.attention_units, 1],
@@ -279,7 +284,7 @@ class DebugPointerGeneratorModel():
                 self.logger.debug('encoder_outputs %s', self.encoder_outputs)
                 self.logger.debug('encoder_last_state %s', self.encoder_last_state)
     
-    def attention(self, prev_state, encoder_outputs):
+    def attention(self, prev_state, encoder_outputs, coverage):
         """
         calculate attention result
         :param prev_state: prev state
@@ -288,6 +293,7 @@ class DebugPointerGeneratorModel():
         """
         e_i = []
         c_i = []
+        
         # encoder_outputs: encoder_time_steps * [batch_size, hidden_units]
         # output: [batch_size, hidden_units]
         for output in encoder_outputs:
@@ -300,7 +306,10 @@ class DebugPointerGeneratorModel():
                     tf.matmul(prev_state, self.attention_w) +
                     # output: [batch_size, hidden_units]
                     # attention_u: [hidden_units, attention_units]
-                    tf.matmul(output, self.attention_u)
+                    tf.matmul(output, self.attention_u) +
+                    # coverage: [batch_size, hidden_units]
+                    # attention_c: [hidden_units, attention_units]
+                    tf.matmul(coverage, self.attention_c)
                 ),
                 # attention_v: [attention_units, 1]
                 self.attention_v)
@@ -308,6 +317,10 @@ class DebugPointerGeneratorModel():
             e_i.append(e_i_j)
         # e_i: [batch_size, encoder_time_steps]
         e_i = tf.concat(e_i, axis=1)
+        
+        # coverage
+        coverage += tf.layers.dense(e_i, self.hidden_units, use_bias=False, name='coverage_dense')
+        
         # alpha_i: [batch_size, encoder_time_steps]
         alpha_i = tf.nn.softmax(e_i, axis=-1)
         # alpha_i_split: encoder_time_steps * [batch_size, 1]
@@ -325,8 +338,7 @@ class DebugPointerGeneratorModel():
         c_i = tf.reduce_sum(c_i, axis=0)
         # c_i: [batch_size, hidden_units]
         # alpha_i: [batch_size, encoder_time_steps]
-        return c_i, alpha_i
-    
+        return c_i, alpha_i, coverage
     
     def build_decoder(self):
         """
@@ -372,12 +384,16 @@ class DebugPointerGeneratorModel():
                                   len(self.encoder_outputs_unstack), self.encoder_outputs_unstack[0])
                 
                 decoder_logits = []
+                attention_distributions = []
                 with tf.variable_scope('loop', reuse=tf.AUTO_REUSE):
+                    coverage = tf.zeros(shape=[self.batch_size, self.hidden_units])
+                    
                     for i, inputs in enumerate(self.decoder_inputs_embedded_unstack):
                         # c_i: [batch_size, hidden_units]
                         # state: [batch_size, hidden_units]
                         # inputs: [batch_size, embedding_size]
-                        c_i, alpha_i = self.attention(state[-1], encoder_outputs=self.encoder_outputs_unstack)
+                        c_i, alpha_i, coverage = self.attention(state[-1], encoder_outputs=self.encoder_outputs_unstack,
+                                                                coverage=coverage)
                         
                         # p_gen_dense: [batch_size, 1]
                         p_gen_dense = tf.layers.dense(tf.concat([c_i, state[-1], inputs], axis=-1),
@@ -408,6 +424,7 @@ class DebugPointerGeneratorModel():
                                                                      self.oovs_max_size)
                         
                         decoder_logits.append(final_distribution)
+                        attention_distributions.append(attention_distribution)
                 
                 # decoder_outputs: [batch_size, decoder_time_steps, hidden_units]
                 # self.decoder_logits = tf.stack(decoder_logits, axis=1)
@@ -458,10 +475,40 @@ class DebugPointerGeneratorModel():
                 merged_losses = sum(masked_losses) / decoder_masked_length
                 self.logger.debug('merged_losses %s', merged_losses)
                 
-                self.loss = tf.reduce_mean(merged_losses)
-                self.logger.debug('loss %s', self.loss)
-            
-            
+                self.generator_loss = tf.reduce_mean(merged_losses)
+                self.logger.debug('generator_loss %s', self.generator_loss)
+                
+                # coverage_matrix: [batch_size, encoder_time_steps]
+                coverage_matrix = tf.zeros_like(attention_distributions[0])
+                # coverage_loss
+                coverage_losses = []
+                for attention_distribution in attention_distributions:
+                    # coverage_loss: [batch_size]
+                    coverage_loss = tf.reduce_sum(tf.minimum(attention_distribution, coverage_matrix),
+                                                  [1])  # calculate the coverage loss for this step
+                    coverage_losses.append(coverage_loss)
+                    coverage_matrix += attention_distribution
+                
+                # decoder_masked_length: [batch_size]
+                decoder_masked_length = tf.reduce_sum(self.decoder_masks, axis=1)
+                self.logger.debug('decoder_masked_length %s', decoder_masked_length)
+                
+                # masked_losses: (decoder_max_time_steps + 1) * [batch_size]
+                masked_losses = [v * self.decoder_masks[:, decoder_step] for decoder_step, v in
+                                 enumerate(coverage_losses)]
+                self.logger.debug('masked_losses %s', masked_losses)
+                
+                # merged_losses: [batch_size]
+                merged_losses = sum(masked_losses) / decoder_masked_length
+                self.logger.debug('merged_losses %s', merged_losses)
+                
+                # coverage_loss: []
+                self.coverage_loss = tf.reduce_mean(merged_losses)
+                self.logger.debug('coverage_loss %s', self.coverage_loss)
+                
+                # total loss
+                self.loss = self.generator_loss + self.coverage_loss_weight * self.coverage_loss
+                self.logger.debug('total loss %s', self.loss)
             
             
             else:
