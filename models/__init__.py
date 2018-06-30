@@ -1,5 +1,6 @@
 from .seq2seq import Seq2SeqModel
 from .seq2seq_attention import Seq2SeqAttentionModel
 from .pointer_generator import PointerGeneratorModel
+from .pointer_generator_coverage import PointerGeneratorCoverageModel
 from .debug_pointer_generator import DebugPointerGeneratorModel
 from .debug_pointer_generator_coverage import DebugPointerGeneratorCoverageModel

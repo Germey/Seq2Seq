@@ -28,7 +28,7 @@ tf.app.flags.DEFINE_string('target_valid_data', 'dataset/couplet/valid.y.txt',
                            'Path to target validation data')
 
 # Network parameters
-tf.app.flags.DEFINE_string('model_class', 'pointer_generator', 'Model class')
+tf.app.flags.DEFINE_string('model_class', 'pointer_generator_coverage', 'Model class')
 tf.app.flags.DEFINE_string('cell_type', 'gru', 'RNN cell for encoder and decoder, default: lstm')
 tf.app.flags.DEFINE_string('attention_type', 'bahdanau', 'Attention mechanism: (bahdanau, luong), default: bahdanau')
 tf.app.flags.DEFINE_integer('hidden_units', 500, 'Number of hidden units in each layer')
@@ -86,7 +86,9 @@ def get_model_class():
         'seq2seq': Seq2SeqModel,
         'seq2seq_attention': Seq2SeqAttentionModel,
         'pointer_generator': PointerGeneratorModel,
-        'debug_pointer_generator': DebugPointerGeneratorModel
+        'pointer_generator_coverage': PointerGeneratorCoverageModel,
+        'debug_pointer_generator': DebugPointerGeneratorModel,
+        'debug_pointer_generator_coverage': DebugPointerGeneratorCoverageModel,
     }
     assert model_class in class_map.keys()
     return class_map[model_class]
