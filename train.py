@@ -28,7 +28,7 @@ tf.app.flags.DEFINE_string('target_valid_data', 'dataset/couplet/valid.y.txt',
                            'Path to target validation data')
 
 # Network parameters
-tf.app.flags.DEFINE_string('model_class', 'seq2seq_attention', 'Model class')
+tf.app.flags.DEFINE_string('model_class', 'pointer_generator', 'Model class')
 tf.app.flags.DEFINE_string('cell_type', 'gru', 'RNN cell for encoder and decoder, default: lstm')
 tf.app.flags.DEFINE_string('attention_type', 'bahdanau', 'Attention mechanism: (bahdanau, luong), default: bahdanau')
 tf.app.flags.DEFINE_integer('hidden_units', 500, 'Number of hidden units in each layer')
@@ -54,7 +54,7 @@ tf.app.flags.DEFINE_integer('encoder_max_time_steps', 30, 'Maximum sequence leng
 tf.app.flags.DEFINE_integer('decoder_max_time_steps', 30, 'Maximum sequence length')
 tf.app.flags.DEFINE_integer('display_freq', 5, 'Display training status every this iteration')
 tf.app.flags.DEFINE_integer('save_freq', 1000, 'Save model checkpoint every this iteration')
-tf.app.flags.DEFINE_integer('valid_freq', 20, 'Evaluate model every this iteration: valid_data needed')
+tf.app.flags.DEFINE_integer('valid_freq', 1000, 'Evaluate model every this iteration: valid_data needed')
 tf.app.flags.DEFINE_string('optimizer_type', 'adam', 'Optimizer for training: (adadelta, adam, rmsprop)')
 tf.app.flags.DEFINE_string('model_dir', 'checkpoints/couplet', 'Path to save model checkpoints')
 tf.app.flags.DEFINE_string('model_name', 'model.ckpt', 'File name used for model checkpoints')
@@ -76,13 +76,16 @@ logging_level = logging.DEBUG if FLAGS.debug else logging.INFO
 logging.basicConfig(level=logging_level, format=FLAGS.logger_format)
 logger = logging.getLogger(FLAGS.logger_name)
 
+print(FLAGS.flag_values_dict())
+
 
 def get_model_class():
     model_class = FLAGS.model_class
     class_map = {
         'seq2seq': Seq2SeqModel,
         'seq2seq_attention': Seq2SeqAttentionModel,
-        'pointer_generator': PointerGeneratorModel
+        'pointer_generator': PointerGeneratorModel,
+        'debug_pointer_generator': DebugPointerGeneratorModel
     }
     assert model_class in class_map.keys()
     return class_map[model_class]

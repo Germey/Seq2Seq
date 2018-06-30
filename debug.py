@@ -1,21 +1,27 @@
 import tensorflow as tf
+import tensorflow.contrib.eager as tfe
+
+from models import DebugPointerGeneratorModel
+from utils.funcs import prepare_pair_batch
+from utils.iterator import ExtendTextIterator
+
+tfe.enable_eager_execution()
 import logging
 
 # Data loading parameters
 
-tf.app.flags.DEFINE_string('source_vocabulary', 'dataset/couplet/vocab.json', 'Path to source vocabulary')
-tf.app.flags.DEFINE_string('target_vocabulary', 'dataset/couplet/vocab.json', 'Path to target vocabulary')
-tf.app.flags.DEFINE_string('source_train_data', 'dataset/couplet/train.x.txt',
+tf.app.flags.DEFINE_string('source_vocabulary', 'dataset/lcsts/word/vocabs.json', 'Path to source vocabulary')
+tf.app.flags.DEFINE_string('target_vocabulary', 'dataset/lcsts/word/vocabs.json', 'Path to target vocabulary')
+tf.app.flags.DEFINE_string('source_train_data', 'dataset/lcsts/word/sources.sample.txt',
                            'Path to source training data')
-tf.app.flags.DEFINE_string('target_train_data', 'dataset/couplet/train.y.txt',
+tf.app.flags.DEFINE_string('target_train_data', 'dataset/lcsts/word/summaries.sample.txt',
                            'Path to target training data')
-tf.app.flags.DEFINE_string('source_valid_data', 'dataset/couplet/valid.x.txt',
+tf.app.flags.DEFINE_string('source_valid_data', 'dataset/lcsts/word/valid.x.txt',
                            'Path to source validation data')
-tf.app.flags.DEFINE_string('target_valid_data', 'dataset/couplet/valid.y.txt',
+tf.app.flags.DEFINE_string('target_valid_data', 'dataset/lcsts/word/valid.y.txt',
                            'Path to target validation data')
 
 # Network parameters
-tf.app.flags.DEFINE_string('model_class', 'seq2seq_attention', 'Model class')
 tf.app.flags.DEFINE_string('cell_type', 'gru', 'RNN cell for encoder and decoder, default: lstm')
 tf.app.flags.DEFINE_string('attention_type', 'bahdanau', 'Attention mechanism: (bahdanau, luong), default: bahdanau')
 tf.app.flags.DEFINE_integer('hidden_units', 500, 'Number of hidden units in each layer')
@@ -23,8 +29,8 @@ tf.app.flags.DEFINE_integer('attention_units', 256, 'Number of attention units i
 tf.app.flags.DEFINE_integer('encoder_depth', 3, 'Number of layers in encoder')
 tf.app.flags.DEFINE_integer('decoder_depth', 3, 'Number of layers in decoder')
 tf.app.flags.DEFINE_integer('embedding_size', 300, 'Embedding dimensions of encoder and decoder inputs')
-tf.app.flags.DEFINE_integer('encoder_vocab_size', 6622, 'Source vocabulary size')
-tf.app.flags.DEFINE_integer('decoder_vocab_size', 6622, 'Target vocabulary size')
+tf.app.flags.DEFINE_integer('encoder_vocab_size', 30000, 'Source vocabulary size')
+tf.app.flags.DEFINE_integer('decoder_vocab_size', 30000, 'Target vocabulary size')
 tf.app.flags.DEFINE_boolean('use_residual', False, 'Use residual connection between layers')
 tf.app.flags.DEFINE_boolean('use_dropout', True, 'Use dropout in each rnn cell')
 tf.app.flags.DEFINE_boolean('use_bidirectional', False, 'Use bidirectional rnn cell')
@@ -72,12 +78,53 @@ logging_level = logging.DEBUG if FLAGS.debug else logging.INFO
 logging.basicConfig(level=logging_level, format=FLAGS.logger_format)
 logger = logging.getLogger(FLAGS.logger_name)
 
+handler = logging.FileHandler('debug.log')
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+
 config = FLAGS.flag_values_dict()
-mode = 'inference'
+mode = 'train'
 
-from models.seq2seq_attention import Seq2SeqAttentionModel
+train_set = ExtendTextIterator(source=FLAGS.source_train_data,
+                               target=FLAGS.target_train_data,
+                               source_dict=FLAGS.source_vocabulary,
+                               target_dict=FLAGS.target_vocabulary,
+                               batch_size=FLAGS.batch_size,
+                               n_words_source=FLAGS.encoder_vocab_size,
+                               n_words_target=FLAGS.decoder_vocab_size,
+                               sort_by_length=FLAGS.sort_by_length,
+                               split_sign=FLAGS.split_sign,
+                               max_length=None,
+                               )
 
-model = Seq2SeqAttentionModel(mode=mode, config=config, logger=logger)
+train_set.reset()
+# source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = [], [], [], [], None
 
-for variable in tf.trainable_variables():
-    print(variable)
+for batch in train_set.next():
+    source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = batch
+    
+    break
+
+source, source_len, target, target_len = prepare_pair_batch(
+    source_batch, target_batch,
+    FLAGS.encoder_max_time_steps,
+    FLAGS.decoder_max_time_steps)
+
+# Get a batch from training parallel data
+source_extend, _, target_extend, _ = prepare_pair_batch(
+    source_extend_batch, target_extend_batch,
+    FLAGS.encoder_max_time_steps,
+    FLAGS.decoder_max_time_steps)
+
+data = {
+    'encoder_inputs': source,
+    'encoder_inputs_length': source_len,
+    'encoder_inputs_extend': source_extend,
+    'decoder_inputs': target,
+    'decoder_inputs_extend': target_extend,
+    'decoder_inputs_length': target_len,
+    'oovs_max_size': oovs_max_size
+}
+
+model = DebugPointerGeneratorModel(mode=mode, config=config, logger=logger, data=data)

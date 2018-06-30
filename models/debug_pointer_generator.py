@@ -1,10 +1,11 @@
 import tensorflow as tf
+
 import math
 from utils.config import GO, EOS
 
 
-class PointerGeneratorModel():
-    def __init__(self, config, mode, logger):
+class DebugPointerGeneratorModel():
+    def __init__(self, config, mode, logger, data):
         """
         init model
         :param config: config dict
@@ -14,11 +15,12 @@ class PointerGeneratorModel():
         assert mode.lower() in ['train', 'inference']
         self.mode = mode.lower()
         self.logger = logger
+        self.data = data
         self.init_config(config)
         self.build_placeholders()
         self.build_encoder()
         self.build_decoder()
-        self.build_optimizer()
+        # self.build_optimizer()
     
     def init_config(self, config):
         """
@@ -44,54 +46,59 @@ class PointerGeneratorModel():
         self.use_bidirectional = config['use_bidirectional']
         self.use_dropout = config['use_dropout']
         self.attention_units = config['attention_units']
-        self.global_step = tf.Variable(0, trainable=False, name='global_step')
-        self.global_epoch_step = tf.Variable(0, trainable=False, name='global_epoch_step')
+        self.global_step = tf.get_variable(trainable=False, name='global_step', initializer=tf.constant(0))
+        self.global_epoch_step = tf.get_variable(trainable=False, name='global_epoch_step', initializer=tf.constant(0))
         self.global_epoch_step_op = tf.assign(self.global_epoch_step, tf.add(self.global_epoch_step, 1))
+        self.batch_size = config['batch_size']
     
     def build_placeholders(self):
         """
         init placeholders
         :return: None
         """
-        self.keep_prob = tf.placeholder(self.dtype, shape=[], name='keep_prob')
+        self.keep_prob = tf.constant(0.8, self.dtype, shape=[], name='keep_prob')
         
-        self.oovs_max_size = tf.placeholder(tf.int32, shape=[], name='oovs_max_size')
+        self.oovs_max_size = tf.constant(self.data['oovs_max_size'], tf.int32, shape=[], name='oovs_max_size')
         
         # encoder_inputs: [batch_size, encoder_time_steps]
-        self.encoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, self.encoder_max_time_steps],
-                                             name='encoder_inputs')
+        self.encoder_inputs = tf.constant(self.data['encoder_inputs'], dtype=tf.int32,
+                                          shape=[self.batch_size, self.encoder_max_time_steps],
+                                          name='encoder_inputs')
         self.logger.debug('encoder_inputs %s', self.encoder_inputs)
         
         # encoder_inputs_length: [batch_size]
-        self.encoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
-                                                    name='encoder_inputs_length')
+        self.encoder_inputs_length = tf.constant(self.data['encoder_inputs_length'], dtype=tf.int32,
+                                                 shape=[self.batch_size],
+                                                 name='encoder_inputs_length')
         self.logger.debug('encoder_inputs_length %s', self.encoder_inputs_length)
         
         # encoder_inputs_extend: [batch_size, encoder_time_steps]
-        self.encoder_inputs_extend = tf.placeholder(dtype=tf.int32,
-                                                    shape=[None, self.encoder_max_time_steps],
-                                                    name='encoder_inputs_extend')
+        self.encoder_inputs_extend = tf.constant(self.data['encoder_inputs_extend'], dtype=tf.int32,
+                                                 shape=[self.batch_size, self.encoder_max_time_steps],
+                                                 name='encoder_inputs_extend')
         self.logger.debug('encoder_inputs_extend %s', self.encoder_inputs_extend)
         
         # batch_size
-        self.batch_size = tf.shape(self.encoder_inputs)[0]
+        # self.batch_size = tf.shape(self.encoder_inputs)[0]
         self.logger.debug('batch_size %s', self.batch_size)
         
         if self.mode == 'train':
             # decoder_inputs: [batch_size, decoder_time_steps]
-            self.decoder_inputs = tf.placeholder(dtype=tf.int32, shape=[None, self.decoder_max_time_steps],
-                                                 name='decoder_inputs')
+            self.decoder_inputs = tf.constant(self.data['decoder_inputs'], dtype=tf.int32,
+                                              shape=[self.batch_size, self.decoder_max_time_steps],
+                                              name='decoder_inputs')
             self.logger.debug('decoder_inputs %s', self.decoder_inputs)
             
             # decoder_inputs_extend: [batch_size, decoder_time_steps]
-            self.decoder_inputs_extend = tf.placeholder(dtype=tf.int32,
-                                                        shape=[None, self.decoder_max_time_steps],
-                                                        name='decoder_inputs_extend')
+            self.decoder_inputs_extend = tf.constant(self.data['decoder_inputs_extend'], dtype=tf.int32,
+                                                     shape=[self.batch_size, self.decoder_max_time_steps],
+                                                     name='decoder_inputs_extend')
             self.logger.debug('decoder_inputs_extend %s', self.decoder_inputs_extend)
             
             # decoder_inputs_length: [batch_size]
-            self.decoder_inputs_length = tf.placeholder(dtype=tf.int32, shape=[None],
-                                                        name='decoder_inputs_length')
+            self.decoder_inputs_length = tf.constant(self.data['decoder_inputs_length'], dtype=tf.int32,
+                                                     shape=[self.batch_size],
+                                                     name='decoder_inputs_length')
             self.logger.debug('decoder_inputs_length %s', self.decoder_inputs_length)
             
             # decoder_start_token: [batch_size, 1]
@@ -132,7 +139,7 @@ class PointerGeneratorModel():
         with tf.variable_scope('attention'):
             
             # attention_u: [hidden_units, attention_units]
-            self.attention_u = tf.get_variable(name='u', shape=[self.hidden_units, self.attention_units],
+            self.attention_u = tf.get_variable(name='a', shape=[self.hidden_units, self.attention_units],
                                                initializer=tf.truncated_normal_initializer)
             self.logger.debug('attention_u %s', self.attention_u)
             
@@ -402,8 +409,8 @@ class PointerGeneratorModel():
                         decoder_logits.append(final_distribution)
                 
                 # decoder_outputs: [batch_size, decoder_time_steps, hidden_units]
-                self.decoder_logits = tf.stack(decoder_logits, axis=1)
-                self.logger.debug('decoder_logits %s', self.decoder_logits)
+                # self.decoder_logits = tf.stack(decoder_logits, axis=1)
+                # self.logger.debug('decoder_logits %s', self.decoder_logits)
                 
                 # decoder_depth * [batch_size, hidden_units]
                 self.decoder_last_state = state
@@ -422,8 +429,11 @@ class PointerGeneratorModel():
                 #                                              weights=self.decoder_masks)
                 # self.logger.debug('loss %s', self.loss)
                 #
+                # self.decoder_logits_sum = tf.reduce_sum(decoder_logits, 2)
+                # self.logger.debug('decoder_logits_sum %s', self.decoder_logits_sum)
                 #
-                # self.predicts = tf.argmax(self.config)
+                # self.decoder_logits_argmax = tf.argmax(decoder_logits, 2)
+                # self.logger.debug('decoder_logits_argmax %s', self.decoder_logits_argmax)
                 
                 losses_group = []
                 for decoder_step in range(self.decoder_max_time_steps + 1):
@@ -449,6 +459,8 @@ class PointerGeneratorModel():
                 
                 self.loss = tf.reduce_mean(merged_losses)
                 self.logger.debug('loss %s', self.loss)
+            
+            
             
             
             else:
@@ -545,7 +557,6 @@ class PointerGeneratorModel():
         # indices: [batch_size, attention_length, 2]
         indices = tf.stack((batch_indices, self.encoder_inputs_extend), axis=2)
         self.logger.debug('indices %s', indices)
-        
         # shape_extend: [batch_size, encoder_vocab_size + oovs_max_size]
         shape_extend = [self.batch_size, self.encoder_vocab_size + oovs_max_size]
         self.logger.debug('shape_extend %s', shape_extend)
