@@ -130,7 +130,7 @@ def train():
                                   split_sign=FLAGS.split_sign,
                                   max_length=None,
                                   )
-    if FLAGS.model_class == 'pointer_generator':
+    if FLAGS.model_class.starts_with('pointer_generator'):
         train_set = ExtendTextIterator(source=FLAGS.source_train_data,
                                        target=FLAGS.target_train_data,
                                        source_dict=FLAGS.source_vocabulary,
@@ -156,7 +156,7 @@ def train():
                                       split_sign=FLAGS.split_sign,
                                       max_length=None
                                       )
-        if FLAGS.model_class == 'pointer_generator':
+        if FLAGS.model_class.starts_with('pointer_generator'):
             valid_set = ExtendTextIterator(source=FLAGS.source_valid_data,
                                            target=FLAGS.target_valid_data,
                                            source_dict=FLAGS.source_vocabulary,
@@ -202,7 +202,7 @@ def train():
                 
                 for batch in train_set.next():
                     
-                    if FLAGS.model_class == 'pointer_generator':
+                    if FLAGS.model_class.starts_with('pointer_generator'):
                         source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = batch
                         
                         # Get a batch from training parallel data
@@ -295,7 +295,7 @@ def train():
                         
                         for batch in valid_set.next():
                             
-                            if FLAGS.model_class == 'pointer_generator':
+                            if FLAGS.model_class.starts_with('pointer_generator'):
                                 source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = batch
                                 
                                 # Get a batch from training parallel data
