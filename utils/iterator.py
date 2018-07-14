@@ -221,7 +221,7 @@ class BiTextIterator():
         self.reset()
         return len(self.source_buffer)
     
-    def extend(self, source, target):
+    def extend(self, source, target, split=False):
         """
         extend vocab
         :param source:
@@ -247,12 +247,21 @@ class BiTextIterator():
                 if w in oovs:  # If w is an in-article OOV
                     target_ids_extend.append(len(self.target_dict) + oovs.index(w))
                 else:  # If w is an out-of-article OOV
-                    target_ids_extend.append(unk_token)  # Map to the UNK token id
+                    if split:
+                        w_splits = list(w)
+                        for w_split in w_splits:
+                            if w_split in self.target_dict:
+                                target_ids_extend.append(self.target_dict[w_split])
+                            else:
+                                print(w_split)
+                                target_ids_extend.append(unk_token)
+                    else:
+                        target_ids_extend.append(unk_token)  # Map to the UNK token id
             else:
                 target_ids_extend.append(self.target_dict[w])
         return source_ids_extend, target_ids_extend, oovs_vocab
     
-    def next(self, extend=False):
+    def next(self, extend=False, split=False):
         """
         get next batch
         :return:
@@ -277,7 +286,7 @@ class BiTextIterator():
                 target_ids = [self.target_dict[w] if w in self.target_dict
                               else unk_token for w in target_item]
                 if extend:
-                    source_ids_extend, target_ids_extend, oovs_vocab = self.extend(source_item, target_item)
+                    source_ids_extend, target_ids_extend, oovs_vocab = self.extend(source_item, target_item, split)
                     if len(oovs_vocab) > oovs_max_size:
                         oovs_max_size = len(oovs_vocab)
                 if self.max_length:

@@ -62,6 +62,7 @@ tf.app.flags.DEFINE_boolean('use_fp16', False, 'Use half precision float16 inste
 tf.app.flags.DEFINE_boolean('shuffle_each_epoch', False, 'Shuffle training dataset for each epoch')
 tf.app.flags.DEFINE_boolean('sort_by_length', False, 'Sort pre-fetched mini batches by their target sequence lengths')
 tf.app.flags.DEFINE_boolean('extend_vocabs', False, 'Whether to extend oov vocabs')
+tf.app.flags.DEFINE_boolean('split_vocabs', False, 'Whether to split oov vocabs')
 
 # Runtime parameters
 tf.app.flags.DEFINE_string('gpu', '-1', 'GPU number')
@@ -174,7 +175,7 @@ def train():
             
             with tqdm(total=train_set.length()) as pbar:
                 
-                for batch in train_set.next(extend=FLAGS.extend_vocabs):
+                for batch in train_set.next(extend=FLAGS.extend_vocabs, split=FLAGS.split_vocabs):
                     
                     if FLAGS.extend_vocabs:
                         source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, _ = batch
@@ -272,7 +273,7 @@ def train():
                         
                         valid_set.reset()
                         
-                        for batch in valid_set.next(extend=FLAGS.extend_vocabs):
+                        for batch in valid_set.next(extend=FLAGS.extend_vocabs, split=FLAGS.split_vocabs):
                             
                             if FLAGS.extend_vocabs:
                                 source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, _ = batch
