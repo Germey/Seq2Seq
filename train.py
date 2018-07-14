@@ -1,14 +1,12 @@
 # !/usr/bin/env python
 # coding: utf-8
-import os
 import math
 import time
 import json
 import numpy as np
 import tensorflow as tf
 from os.path import join
-from utils.iterator import TrainTextIterator, ExtendTextIterator
-from models import *
+from utils.iterator import BiTextIterator
 from tqdm import tqdm
 from utils.funcs import prepare_pair_batch, get_summary
 import os
@@ -63,6 +61,7 @@ tf.app.flags.DEFINE_string('model_name', 'model.ckpt', 'File name used for model
 tf.app.flags.DEFINE_boolean('use_fp16', False, 'Use half precision float16 instead of float32 as dtype')
 tf.app.flags.DEFINE_boolean('shuffle_each_epoch', False, 'Shuffle training dataset for each epoch')
 tf.app.flags.DEFINE_boolean('sort_by_length', False, 'Sort pre-fetched mini batches by their target sequence lengths')
+tf.app.flags.DEFINE_boolean('extend_vocabs', False, 'Whether to extend oov vocabs')
 
 # Runtime parameters
 tf.app.flags.DEFINE_string('gpu', '-1', 'GPU number')
@@ -82,6 +81,12 @@ print(FLAGS.flag_values_dict())
 
 
 def create_model(session, config):
+    """
+    create model with session and config
+    :param session: session object
+    :param config: config dict
+    :return:
+    """
     model_class = get_model_class(config['model_class'])
     model = model_class(config, 'train', logger)
     
@@ -100,60 +105,41 @@ def create_model(session, config):
 
 
 def train():
+    """
+    train process
+    :return:
+    """
     if int(FLAGS.gpu) >= 0:
         os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
     logger.info('Using GPU %s', os.environ.get('CUDA_VISIBLE_DEVICES'))
+    
     # Load parallel data to train
     logger.info('Loading training data...')
-    train_set = TrainTextIterator(source=FLAGS.source_train_data,
-                                  target=FLAGS.target_train_data,
-                                  source_dict=FLAGS.source_vocabulary,
-                                  target_dict=FLAGS.target_vocabulary,
-                                  batch_size=FLAGS.batch_size,
-                                  n_words_source=FLAGS.encoder_vocab_size,
-                                  n_words_target=FLAGS.decoder_vocab_size,
-                                  sort_by_length=FLAGS.sort_by_length,
-                                  split_sign=FLAGS.split_sign,
-                                  max_length=None,
-                                  )
-    if FLAGS.model_class.startswith('pointer_generator'):
-        train_set = ExtendTextIterator(source=FLAGS.source_train_data,
-                                       target=FLAGS.target_train_data,
-                                       source_dict=FLAGS.source_vocabulary,
-                                       target_dict=FLAGS.target_vocabulary,
-                                       batch_size=FLAGS.batch_size,
-                                       n_words_source=FLAGS.encoder_vocab_size,
-                                       n_words_target=FLAGS.decoder_vocab_size,
-                                       sort_by_length=FLAGS.sort_by_length,
-                                       split_sign=FLAGS.split_sign,
-                                       max_length=None,
-                                       )
+    train_set = BiTextIterator(source=FLAGS.source_train_data,
+                               target=FLAGS.target_train_data,
+                               source_dict=FLAGS.source_vocabulary,
+                               target_dict=FLAGS.target_vocabulary,
+                               batch_size=FLAGS.batch_size,
+                               n_words_source=FLAGS.encoder_vocab_size,
+                               n_words_target=FLAGS.decoder_vocab_size,
+                               sort_by_length=FLAGS.sort_by_length,
+                               split_sign=FLAGS.split_sign,
+                               max_length=None,
+                               )
     
     if FLAGS.source_valid_data and FLAGS.target_valid_data:
         logger.info('Loading validation data...')
-        valid_set = TrainTextIterator(source=FLAGS.source_valid_data,
-                                      target=FLAGS.target_valid_data,
-                                      source_dict=FLAGS.source_vocabulary,
-                                      target_dict=FLAGS.target_vocabulary,
-                                      batch_size=FLAGS.batch_size,
-                                      n_words_source=FLAGS.encoder_vocab_size,
-                                      n_words_target=FLAGS.decoder_vocab_size,
-                                      sort_by_length=FLAGS.sort_by_length,
-                                      split_sign=FLAGS.split_sign,
-                                      max_length=None
-                                      )
-        if FLAGS.model_class.startswith('pointer_generator'):
-            valid_set = ExtendTextIterator(source=FLAGS.source_valid_data,
-                                           target=FLAGS.target_valid_data,
-                                           source_dict=FLAGS.source_vocabulary,
-                                           target_dict=FLAGS.target_vocabulary,
-                                           batch_size=FLAGS.batch_size,
-                                           n_words_source=FLAGS.encoder_vocab_size,
-                                           n_words_target=FLAGS.decoder_vocab_size,
-                                           sort_by_length=FLAGS.sort_by_length,
-                                           split_sign=FLAGS.split_sign,
-                                           max_length=None
-                                           )
+        valid_set = BiTextIterator(source=FLAGS.source_valid_data,
+                                   target=FLAGS.target_valid_data,
+                                   source_dict=FLAGS.source_vocabulary,
+                                   target_dict=FLAGS.target_vocabulary,
+                                   batch_size=FLAGS.batch_size,
+                                   n_words_source=FLAGS.encoder_vocab_size,
+                                   n_words_target=FLAGS.decoder_vocab_size,
+                                   sort_by_length=FLAGS.sort_by_length,
+                                   split_sign=FLAGS.split_sign,
+                                   max_length=None
+                                   )
     else:
         valid_set = None
     
@@ -161,9 +147,9 @@ def train():
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=FLAGS.allow_soft_placement,
                                           log_device_placement=FLAGS.log_device_placement,
                                           gpu_options=tf.GPUOptions(allow_growth=True))) as sess:
-    
+        
         config = FLAGS.flag_values_dict()
-    
+        
         # Create a new model or reload existing checkpoint
         model = create_model(sess, config)
         
@@ -190,7 +176,7 @@ def train():
                 
                 for batch in train_set.next():
                     
-                    if FLAGS.model_class.startswith('pointer_generator'):
+                    if FLAGS.extend_vocabs:
                         source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, _ = batch
                         
                         # Get a batch from training parallel data
@@ -204,12 +190,14 @@ def train():
                             source_extend_batch, target_extend_batch,
                             FLAGS.encoder_max_time_steps,
                             FLAGS.decoder_max_time_steps)
+                        
                         logger.info('Training batch data shape %s, %s, %s, %s', source.shape, target.shape,
                                     source_extend.shape, target_extend.shape)
                         processed_number += len(source_batch)
                         
                         # Execute a single training step
-                        step_loss, _ = model.train(sess, encoder_inputs=source,
+                        step_loss, _ = model.train(sess,
+                                                   encoder_inputs=source,
                                                    encoder_inputs_extend=source_extend,
                                                    encoder_inputs_length=source_len,
                                                    decoder_inputs=target,
@@ -230,8 +218,11 @@ def train():
                         processed_number += len(source_batch)
                         
                         # Execute a single training step
-                        step_loss, _ = model.train(sess, encoder_inputs=source, encoder_inputs_length=source_len,
-                                                   decoder_inputs=target, decoder_inputs_length=target_len)
+                        step_loss, _ = model.train(sess,
+                                                   encoder_inputs=source,
+                                                   encoder_inputs_length=source_len,
+                                                   decoder_inputs=target,
+                                                   decoder_inputs_length=target_len)
                     
                     loss += float(step_loss) / FLAGS.display_freq
                     
@@ -283,7 +274,7 @@ def train():
                         
                         for batch in valid_set.next():
                             
-                            if FLAGS.model_class.startswith('pointer_generator'):
+                            if FLAGS.extend_vocabs:
                                 source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, _ = batch
                                 
                                 # Get a batch from training parallel data
@@ -302,7 +293,8 @@ def train():
                                 processed_number += len(source_batch)
                                 
                                 # Execute a single training step
-                                step_loss = model.eval(sess, encoder_inputs=source,
+                                step_loss = model.eval(sess,
+                                                       encoder_inputs=source,
                                                        encoder_inputs_extend=source_extend,
                                                        encoder_inputs_length=source_len,
                                                        decoder_inputs=target,
