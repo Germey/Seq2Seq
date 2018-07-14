@@ -3,7 +3,6 @@ import tensorflow.contrib.eager as tfe
 
 from models import DebugPointerGeneratorCoverageModel, DebugPointerGeneratorModel
 from utils.funcs import prepare_pair_batch
-from utils.iterator import ExtendTextIterator
 
 tfe.enable_eager_execution()
 import logging
@@ -88,7 +87,7 @@ config = FLAGS.flag_values_dict()
 
 mode = 'inference'
 
-train_set = ExtendTextIterator(source=FLAGS.source_train_data,
+train_set = TextIterator(source=FLAGS.source_train_data,
                                target=FLAGS.target_train_data,
                                source_dict=FLAGS.source_vocabulary,
                                target_dict=FLAGS.target_vocabulary,
