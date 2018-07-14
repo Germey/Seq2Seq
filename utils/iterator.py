@@ -313,15 +313,24 @@ class ExtendTextIterator():
         return len(self.source_buffer)
     
     def extend(self, source, target):
+        """
+        extend vocab
+        :param source:
+        :param target:
+        :return:
+        """
         oovs = []
+        oovs_vocab = {}
         source_ids_extend, target_ids_extend = [], []
         for w in source:
             if not w in self.source_dict:
                 if w not in oovs:  # Add to list of OOVs
                     oovs.append(w)
+                    # oovs_vocab[w] =
                 oov_num = oovs.index(w)  # This is 0 for the first article OOV, 1 for the second article OOV...
                 source_ids_extend.append(len(
                     self.source_dict) + oov_num)  # This is e.g. 50000 for the first article OOV, 50001 for the second...
+                oovs_vocab[w] = len(self.source_dict) + oov_num
             else:
                 source_ids_extend.append(self.source_dict[w])
         for w in target:
@@ -332,14 +341,14 @@ class ExtendTextIterator():
                     target_ids_extend.append(unk_token)  # Map to the UNK token id
             else:
                 target_ids_extend.append(self.target_dict[w])
-        return source_ids_extend, target_ids_extend, oovs
+        return source_ids_extend, target_ids_extend, oovs_vocab
     
     def next(self):
         """
         get next batch
         :return:
         """
-        source, target, source_extend, target_extend = [], [], [], []
+        source, target, source_extend, target_extend, oovs_vocabs = [], [], [], [], []
         oovs_max_size = 0
         # actual work here
         while not self.end_of_data:
@@ -355,9 +364,9 @@ class ExtendTextIterator():
                               else unk_token for w in source_item]
                 target_ids = [self.target_dict[w] if w in self.target_dict
                               else unk_token for w in target_item]
-                source_ids_extend, target_ids_extend, oovs = self.extend(source_item, target_item)
-                if len(oovs) > oovs_max_size:
-                    oovs_max_size = len(oovs)
+                source_ids_extend, target_ids_extend, oovs_vocab = self.extend(source_item, target_item)
+                if len(oovs_vocab) > oovs_max_size:
+                    oovs_max_size = len(oovs_vocab)
                 if self.max_length:
                     if len(source_ids) > self.max_length and len(target_ids) > self.max_length:
                         continue
@@ -368,13 +377,14 @@ class ExtendTextIterator():
                 target.append(target_ids)
                 source_extend.append(source_ids_extend)
                 target_extend.append(target_ids_extend)
+                oovs_vocabs.append(oovs_vocab)
             
             if self.end_of_data and len(source) and len(target):
-                yield source, target, source_extend, target_extend, oovs_max_size
-                source, target, source_extend, target_extend = [], [], [], []
+                yield source, target, source_extend, target_extend, oovs_max_size, oovs_vocabs
+                source, target, source_extend, target_extend, oovs_vocabs = [], [], [], [], []
                 oovs_max_size = 0
             
             if len(source) >= self.batch_size and len(target) >= self.batch_size:
-                yield source, target, source_extend, target_extend, oovs_max_size
-                source, target, source_extend, target_extend = [], [], [], []
+                yield source, target, source_extend, target_extend, oovs_max_size, oovs_vocabs
+                source, target, source_extend, target_extend, oovs_vocabs = [], [], [], [], []
                 oovs_max_size = 0

@@ -2,20 +2,22 @@
 # coding: utf-8
 import os
 import logging
-from utils.iterator import InferenceIterator
-from utils.funcs import prepare_batch, load_inverse_dict, seq2words
+
+from preprocess.config import UNK
+from utils.iterator import InferenceIterator, ExtendTextIterator, end_token
+from utils.funcs import prepare_batch, load_inverse_dict, inverse_dict
 import json
 import tensorflow as tf
-from models.seq2seq import Seq2SeqModel
+from cls import get_model_class
 
 # Decoding parameters
 tf.app.flags.DEFINE_integer('beam_width', 1, 'Beam width used in beam search')
 tf.app.flags.DEFINE_integer('inference_batch_size', 256, 'Batch size used for decoding')
 tf.app.flags.DEFINE_integer('max_inference_step', 60, 'Maximum time step limit to decode')
-tf.app.flags.DEFINE_string('model_path', 'checkpoints/couplet_seq2seq/couplet.ckpt-70000',
+tf.app.flags.DEFINE_string('model_path', 'checkpoints/lcsts_word_pointer_generator/lcsts.ckpt-1030000',
                            'Path to a specific model checkpoint.')
-tf.app.flags.DEFINE_string('inference_input', 'dataset/couplet/test.x.txt', 'Decoding input path')
-tf.app.flags.DEFINE_string('inference_output', 'dataset/couplet/test.inference.txt', 'Decoding output path')
+tf.app.flags.DEFINE_string('inference_input', 'dataset/lcsts/word/sources.test.txt', 'Decoding input path')
+tf.app.flags.DEFINE_string('inference_output', 'dataset/lcsts/char/summaries.inference.txt', 'Decoding output path')
 
 # Runtime parameters
 tf.app.flags.DEFINE_boolean('allow_soft_placement', True, 'Allow device soft placement')
@@ -40,7 +42,8 @@ def load_config(FLAGS):
 
 
 def load_model(session, config):
-    model = Seq2SeqModel(config, 'inference', logger)
+    model_class = get_model_class(config['model_class'])
+    model = model_class(config, 'inference', logger)
     if tf.train.checkpoint_exists(FLAGS.model_path):
         logger.info('Reloading model parameters..')
         model.restore(session, FLAGS.model_path)
@@ -48,6 +51,24 @@ def load_model(session, config):
         raise ValueError(
             'No such file:[{}]'.format(FLAGS.model_path))
     return model
+
+
+def seq2words(seq, inverse_target_dictionary, oovs_vocab=None):
+    words = []
+    if oovs_vocab:
+        inverse_target_dictionary.update(oovs_vocab)
+    for w in seq:
+        if w == end_token:
+            break
+        if w in inverse_target_dictionary:
+            result = inverse_target_dictionary[w]
+            if result == 'UNK':
+                words.append(result)
+            else:
+                words += list(result)
+        else:
+            words.append(UNK)
+    return ' '.join(words)
 
 
 def decode():
@@ -62,6 +83,21 @@ def decode():
                                  batch_size=config['inference_batch_size'],
                                  source_dict=config['source_vocabulary'],
                                  n_words_source=config['encoder_vocab_size'])
+    
+    if config['model_class'].startswith('pointer_generator'):
+        test_set = ExtendTextIterator(source=config['inference_input'],
+                                      target=config['inference_input'],
+                                      source_dict=config['source_vocabulary'],
+                                      target_dict=config['target_vocabulary'],
+                                      batch_size=config['inference_batch_size'],
+                                      n_words_source=config['encoder_vocab_size'],
+                                      n_words_target=config['decoder_vocab_size'],
+                                      sort_by_length=config['sort_by_length'],
+                                      split_sign=config['split_sign'],
+                                      max_length=None,
+                                      )
+    
+    test_set.reset()
     
     # Load inverse dictionary used in decoding
     target_inverse_dict = load_inverse_dict(config['target_vocabulary'])
@@ -78,14 +114,22 @@ def decode():
         
         line_number = 0
         
-        for idx, source_seq in enumerate(test_set.next()):
-            source, source_len = prepare_batch(source_seq)
+        for idx, batch in enumerate(test_set.next()):
+            source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, oovs_vocabs = batch
+            
+            source, source_len = prepare_batch(source_batch, config['encoder_max_time_steps'])
+            source_extend, _ = prepare_batch(source_extend_batch, config['encoder_max_time_steps'])
             line_number += len(source)
             
-            predicts, scores = model.inference(sess, source, source_len)
+            predicts, scores = model.inference(sess,
+                                               encoder_inputs=source,
+                                               encoder_inputs_extend=source_extend,
+                                               encoder_inputs_length=source_len,
+                                               oovs_max_size=oovs_max_size)
             
-            for predict_seq, score_seq in zip(predicts, scores):
-                result = seq2words(predict_seq, inverse_target_dictionary=target_inverse_dict)
+            for predict_seq, score_seq, oovs_vocab in zip(predicts, scores, oovs_vocabs):
+                result = seq2words(predict_seq, inverse_target_dictionary=target_inverse_dict,
+                                   oovs_vocab=inverse_dict(oovs_vocab))
                 logger.info('result %s', result)
                 fout.write(result + '\n')
             logger.info('%s lines processed', line_number)

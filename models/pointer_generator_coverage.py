@@ -531,7 +531,7 @@ class PointerGeneratorCoverageModel():
                 input = self.decoder_initial_tokens_embedded
                 
                 # decoder loop
-                for _ in range(self.decoder_max_time_steps):
+                for _ in range(1):
                     # decode one step
                     # input: [batch_size, embedding_size]
                     # state:

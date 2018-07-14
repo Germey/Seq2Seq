@@ -19,6 +19,10 @@ def load_dict(filename):
             return pickle.load(f)
 
 
+def inverse_dict(map):
+    return {v: k for k, v in map.items()}
+
+
 def load_inverse_dict(dict_path):
     orig_dict = load_dict(dict_path)
     idict = {}
@@ -31,8 +35,10 @@ def load_inverse_dict(dict_path):
     return idict
 
 
-def seq2words(seq, inverse_target_dictionary):
+def seq2words(seq, inverse_target_dictionary, oovs_vocab=None):
     words = []
+    if oovs_vocab:
+        inverse_target_dictionary.update(oovs_vocab)
     for w in seq:
         if w == end_token:
             break
@@ -40,7 +46,7 @@ def seq2words(seq, inverse_target_dictionary):
             words.append(inverse_target_dictionary[w])
         else:
             words.append(UNK)
-    return ''.join(words)
+    return ' '.join(words)
 
 
 # batch preparation of a given sequence

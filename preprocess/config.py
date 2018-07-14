@@ -14,6 +14,7 @@ REPLACE_PATTERNS = [
     (',', '，'),
     ('!', '！'),
     (';', '；'),
+    (' ', ''),
 ]
 
 DATE_PATTERNS = [

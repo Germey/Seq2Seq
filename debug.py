@@ -1,7 +1,7 @@
 import tensorflow as tf
 import tensorflow.contrib.eager as tfe
 
-from models import DebugPointerGeneratorCoverageModel
+from models import DebugPointerGeneratorCoverageModel, DebugPointerGeneratorModel
 from utils.funcs import prepare_pair_batch
 from utils.iterator import ExtendTextIterator
 
@@ -12,9 +12,9 @@ import logging
 
 tf.app.flags.DEFINE_string('source_vocabulary', 'dataset/lcsts/word/vocabs.json', 'Path to source vocabulary')
 tf.app.flags.DEFINE_string('target_vocabulary', 'dataset/lcsts/word/vocabs.json', 'Path to target vocabulary')
-tf.app.flags.DEFINE_string('source_train_data', 'dataset/lcsts/word/sources.sample.txt',
+tf.app.flags.DEFINE_string('source_train_data', 'dataset/lcsts/word/sources.eval.txt',
                            'Path to source training data')
-tf.app.flags.DEFINE_string('target_train_data', 'dataset/lcsts/word/summaries.sample.txt',
+tf.app.flags.DEFINE_string('target_train_data', 'dataset/lcsts/word/summaries.eval.txt',
                            'Path to target training data')
 tf.app.flags.DEFINE_string('source_valid_data', 'dataset/lcsts/word/valid.x.txt',
                            'Path to source validation data')
@@ -85,7 +85,8 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 config = FLAGS.flag_values_dict()
-mode = 'train'
+
+mode = 'inference'
 
 train_set = ExtendTextIterator(source=FLAGS.source_train_data,
                                target=FLAGS.target_train_data,
@@ -103,29 +104,39 @@ train_set.reset()
 # source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = [], [], [], [], None
 
 for batch in train_set.next():
-    source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = batch
+    source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, oovs_vocabs = batch
+    print(oovs_vocabs)
+    # break
+
+# print(source_extend_batch)
     
-    break
+    source, source_len, target, target_len = prepare_pair_batch(
+        source_batch, target_batch,
+        FLAGS.encoder_max_time_steps,
+        FLAGS.decoder_max_time_steps)
+    
+    # Get a batch from training parallel data
+    source_extend, _, target_extend, _ = prepare_pair_batch(
+        source_extend_batch, target_extend_batch,
+        FLAGS.encoder_max_time_steps,
+        FLAGS.decoder_max_time_steps)
 
-source, source_len, target, target_len = prepare_pair_batch(
-    source_batch, target_batch,
-    FLAGS.encoder_max_time_steps,
-    FLAGS.decoder_max_time_steps)
+# print()
+#
+# data = {
+#     'encoder_inputs': source,
+#     'encoder_inputs_length': source_len,
+#     'encoder_inputs_extend': source_extend,
+#     'decoder_inputs': target,
+#     'decoder_inputs_extend': target_extend,
+#     'decoder_inputs_length': target_len,
+#     # 'oovs_max_size': oovs_max_size,
+#     # 'oovs_vocabs': oovs_vocabs
+# }
 
-# Get a batch from training parallel data
-source_extend, _, target_extend, _ = prepare_pair_batch(
-    source_extend_batch, target_extend_batch,
-    FLAGS.encoder_max_time_steps,
-    FLAGS.decoder_max_time_steps)
+    print(target_extend)
 
-data = {
-    'encoder_inputs': source,
-    'encoder_inputs_length': source_len,
-    'encoder_inputs_extend': source_extend,
-    'decoder_inputs': target,
-    'decoder_inputs_extend': target_extend,
-    'decoder_inputs_length': target_len,
-    'oovs_max_size': oovs_max_size
-}
+# model = DebugPointerGeneratorModel(mode=mode, config=config, logger=logger, data=data)
 
-model = DebugPointerGeneratorCoverageModel(mode=mode, config=config, logger=logger, data=data)
+
+# predicts, scores = model.inference(sess, source, source_len)

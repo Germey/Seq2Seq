@@ -13,6 +13,7 @@ from tqdm import tqdm
 from utils.funcs import prepare_pair_batch, get_summary
 import os
 import logging
+from cls import get_model_class
 
 # Data loading parameters
 
@@ -80,23 +81,8 @@ logger = logging.getLogger(FLAGS.logger_name)
 print(FLAGS.flag_values_dict())
 
 
-def get_model_class():
-    model_class = FLAGS.model_class
-    class_map = {
-        'seq2seq': Seq2SeqModel,
-        'seq2seq_attention': Seq2SeqAttentionModel,
-        'pointer_generator': PointerGeneratorModel,
-        'pointer_generator_coverage': PointerGeneratorCoverageModel,
-        'debug_pointer_generator': DebugPointerGeneratorModel,
-        'debug_pointer_generator_coverage': DebugPointerGeneratorCoverageModel,
-    }
-    assert model_class in class_map.keys()
-    return class_map[model_class]
-
-
-def create_model(session, FLAGS):
-    config = FLAGS.flag_values_dict()
-    model_class = get_model_class()
+def create_model(session, config):
+    model_class = get_model_class(config['model_class'])
     model = model_class(config, 'train', logger)
     
     ckpt = tf.train.get_checkpoint_state(FLAGS.model_dir)
@@ -175,9 +161,11 @@ def train():
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=FLAGS.allow_soft_placement,
                                           log_device_placement=FLAGS.log_device_placement,
                                           gpu_options=tf.GPUOptions(allow_growth=True))) as sess:
-        
+    
+        config = FLAGS.flag_values_dict()
+    
         # Create a new model or reload existing checkpoint
-        model = create_model(sess, FLAGS)
+        model = create_model(sess, config)
         
         # Create a log writer object
         train_summary_writer = tf.summary.FileWriter(join(FLAGS.model_dir, 'train'), graph=sess.graph)
@@ -203,7 +191,7 @@ def train():
                 for batch in train_set.next():
                     
                     if FLAGS.model_class.startswith('pointer_generator'):
-                        source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = batch
+                        source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, _ = batch
                         
                         # Get a batch from training parallel data
                         source, source_len, target, target_len = prepare_pair_batch(
@@ -296,7 +284,7 @@ def train():
                         for batch in valid_set.next():
                             
                             if FLAGS.model_class.startswith('pointer_generator'):
-                                source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size = batch
+                                source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, _ = batch
                                 
                                 # Get a batch from training parallel data
                                 source, source_len, target, target_len = prepare_pair_batch(

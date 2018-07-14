@@ -1,6 +1,6 @@
 import tensorflow as tf
 import math
-from utils.config import GO, EOS
+from utils.config import GO, EOS, UNK
 
 
 class PointerGeneratorModel():
@@ -461,6 +461,10 @@ class PointerGeneratorModel():
             
             else:
                 
+                self.decoder_scores = []
+                self.decoder_probabilities = []
+                self.decoder_predicts = []
+                
                 # decoder_initial_tokens: [batch_size]
                 self.decoder_initial_tokens = tf.ones(shape=[self.batch_size], dtype=tf.int32,
                                                       name='initial_tokens') * GO
@@ -471,59 +475,82 @@ class PointerGeneratorModel():
                                                                               ids=self.decoder_initial_tokens)
                 self.logger.debug('decoder_initial_tokens_embedded %s', self.decoder_initial_tokens_embedded)
                 
-                self.decoder_outputs = []
-                self.decoder_logits = []
-                self.decoder_probabilities = []
-                self.decoder_predicts = []
-                self.decoder_scores = []
+                inputs = self.decoder_initial_tokens_embedded
+                with tf.variable_scope('loop', reuse=tf.AUTO_REUSE):
+                    
+                    for _ in range(self.decoder_max_time_steps):
+                        c_i, alpha_i = self.attention(state[-1], encoder_outputs=self.encoder_outputs_unstack)
+                        
+                        # p_gen_dense: [batch_size, 1]
+                        p_gen_dense = tf.layers.dense(tf.concat([c_i, state[-1], inputs], axis=-1),
+                                                      units=1,
+                                                      name='p_gen_dense')
+                        
+                        self.logger.debug('p_gen_dense %s', p_gen_dense)
+                        # p_gen: [batch_size, 1]
+                        p_gen = tf.nn.sigmoid(p_gen_dense, name='p_gen_sigmoid')
+                        self.logger.debug('p_gen %s', p_gen)
+                        
+                        inputs = tf.concat([inputs, c_i], axis=1)
+                        outputs, state = self.decoder_cell(inputs=inputs, state=state)
+                        
+                        # outputs_logits: [batch_size, decoder_vocab_size]
+                        outputs_logits = tf.layers.dense(inputs=outputs,
+                                                         units=self.decoder_vocab_size,
+                                                         name='outputs_dense')
+                        self.logger.debug('outputs_logits %s', outputs_logits)
+                        
+                        # vocab_distribution: [batch_size, decoder_vocab_size]
+                        vocab_distribution = tf.nn.softmax(outputs_logits, axis=-1)
+                        
+                        # attention_distribution: [batch_size, encoder_inputs_length]
+                        attention_distribution = alpha_i
+                        
+                        # final_distribution: [batch_size, decoder_vocab_size + oovs_max_size]
+                        final_distribution = self.merge_distribution(p_gen, attention_distribution, vocab_distribution,
+                                                                     self.oovs_max_size)
+                        
+                        self.logger.debug('final_distribution %s', final_distribution)
+                        
+                        self.decoder_probabilities.append(final_distribution)
+                        
+                        # argmax index
+                        predicts = tf.argmax(final_distribution, -1)
+                        
+                        self.logger.debug('predicts %s', predicts)
+                        
+                        self.decoder_predicts.append(predicts)
+                        
+                        # self.logger.debug('oov_vocabs %s', self.oovs_vocabs)
+                        
+                        greater_index = tf.cast(tf.greater_equal(predicts, self.decoder_vocab_size), tf.int64)
+                        
+                        self.logger.debug('greater index %s', greater_index)
+                        
+                        indices = tf.ones([self.batch_size], tf.int64) - greater_index
+                        
+                        self.logger.debug('indices %s', indices)
+                        
+                        input_next = tf.multiply(predicts, indices) + \
+                                   tf.multiply(greater_index, tf.ones([self.batch_size], tf.int64) * UNK)
+                        
+                        self.logger.debug('predicts %s', predicts)
+                        
+                        # argmax probability score
+                        scores = tf.reduce_max(final_distribution, -1)
+                        
+                        self.decoder_scores.append(scores)
+                        
+                        # next input
+                        inputs = tf.nn.embedding_lookup(params=self.decoder_embeddings,
+                                                        ids=input_next)
                 
-                # initial state and input
-                state = self.decoder_initial_state
-                # input: [batch_size, embedding_size]
-                input = self.decoder_initial_tokens_embedded
-                
-                # decoder loop
-                for _ in range(self.decoder_max_time_steps):
-                    # decode one step
-                    # input: [batch_size, embedding_size]
-                    # state:
-                    output, state = self.decoder_cell(
-                        inputs=input,
-                        state=state)
-                    
-                    logits = tf.layers.dense(inputs=output,
-                                             units=self.decoder_vocab_size,
-                                             name='decoder_logits', reuse=tf.AUTO_REUSE)
-                    # probability matrix
-                    probabilities = tf.nn.softmax(logits, -1)
-                    
-                    # argmax index
-                    predicts = tf.argmax(probabilities, -1)
-                    
-                    # argmax probability score
-                    scores = tf.reduce_max(probabilities, -1)
-                    
-                    # next input
-                    input = tf.nn.embedding_lookup(params=self.decoder_embeddings,
-                                                   ids=predicts)
-                    
-                    self.decoder_last_state = state
-                    self.decoder_outputs.append(output)
-                    self.decoder_logits.append(logits)
-                    self.decoder_probabilities.append(probabilities)
-                    self.decoder_predicts.append(predicts)
-                    self.decoder_scores.append(scores)
-                
-                self.decoder_outputs = tf.stack(self.decoder_outputs, axis=1)
-                self.decoder_logits = tf.stack(self.decoder_logits, axis=1)
                 self.decoder_probabilities = tf.stack(self.decoder_probabilities, axis=1)
                 self.decoder_predicts = tf.stack(self.decoder_predicts, axis=1)
                 self.decoder_scores = tf.stack(self.decoder_scores, axis=1)
                 
-                self.logger.debug('decoder_logits %s', self.decoder_logits)
                 self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
                 self.logger.debug('decoder_predicts %s', self.decoder_predicts)
-                self.logger.debug('decoder_last_state %s', self.decoder_last_state)
                 self.logger.debug('decoder_scores %s', self.decoder_scores)
     
     def merge_distribution(self, p_gen, attention_distribution, vocab_distribution, oovs_max_size):
