@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-cd ..
+cd ../..
 python3 train.py\
-    --model_class pointer_generator\
+    --model_class debug_pointer_generator\
     --batch_size 256\
     --hidden_units 400\
     --embedding_size 300\
@@ -24,5 +24,4 @@ python3 train.py\
     --encoder_vocab_size 30000\
     --decoder_vocab_size 30000\
     --cell_type gru\
-    --max_epochs 100000\
-    --extend_vocabs True
+    --max_epochs 0

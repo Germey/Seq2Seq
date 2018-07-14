@@ -174,7 +174,7 @@ def train():
             
             with tqdm(total=train_set.length()) as pbar:
                 
-                for batch in train_set.next():
+                for batch in train_set.next(extend=FLAGS.extend_vocabs):
                     
                     if FLAGS.extend_vocabs:
                         source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, _ = batch
@@ -272,7 +272,7 @@ def train():
                         
                         valid_set.reset()
                         
-                        for batch in valid_set.next():
+                        for batch in valid_set.next(extend=FLAGS.extend_vocabs):
                             
                             if FLAGS.extend_vocabs:
                                 source_batch, target_batch, source_extend_batch, target_extend_batch, oovs_max_size, _ = batch

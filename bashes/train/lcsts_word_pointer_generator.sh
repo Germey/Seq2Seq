@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-cd ..
+cd ../..
 python3 train.py\
-    --model_class pointer_generator_coverage\
+    --model_class pointer_generator\
     --batch_size 256\
     --hidden_units 400\
     --embedding_size 300\
@@ -13,7 +13,7 @@ python3 train.py\
     --display_freq 5\
     --save_freq 2000\
     --valid_freq 400\
-    --model_dir checkpoints/lcsts_word_pointer_generator_coverage\
+    --model_dir checkpoints/lcsts_word_pointer_generator\
     --model_name lcsts.ckpt\
     --source_vocabulary dataset/lcsts/word/vocabs.json\
     --target_vocabulary dataset/lcsts/word/vocabs.json\

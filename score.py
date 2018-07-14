@@ -3,7 +3,7 @@ from os.path import join
 import json
 
 # config
-base_path = './scores/lcsts_word_pointer_generator/char'
+base_path = './scores/lcsts_word_seq2seq/word'
 hypothesis_file = 'summaries.inference.txt'
 reference_file = 'summaries.test.txt'
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-cd ..
+cd ../..
 python3 train.py\
     --model_class seq2seq\
     --batch_size 256\

@@ -12,7 +12,7 @@ def get_summary(name, value):
 
 def load_dict(filename):
     try:
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             return json.load(f)
     except:
         with open(filename, 'r') as f:

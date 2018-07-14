@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-cd ..
+cd ../..
 python3 train.py\
-    --model_class seq2seq_attention\
+    --model_class pointer_generator_coverage\
     --batch_size 256\
     --hidden_units 400\
     --embedding_size 300\
@@ -13,7 +13,7 @@ python3 train.py\
     --display_freq 5\
     --save_freq 2000\
     --valid_freq 400\
-    --model_dir checkpoints/lcsts_word_seq2seq_attention\
+    --model_dir checkpoints/lcsts_word_pointer_generator_coverage\
     --model_name lcsts.ckpt\
     --source_vocabulary dataset/lcsts/word/vocabs.json\
     --target_vocabulary dataset/lcsts/word/vocabs.json\
@@ -24,4 +24,5 @@ python3 train.py\
     --encoder_vocab_size 30000\
     --decoder_vocab_size 30000\
     --cell_type gru\
-    --max_epochs 100000
+    --max_epochs 100000\
+    --extend_vocabs True

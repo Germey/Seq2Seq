@@ -403,15 +403,19 @@ class Seq2SeqAttentionModel():
                 # initial state and input
                 state = self.decoder_initial_state
                 # input: [batch_size, embedding_size]
-                input = self.decoder_initial_tokens_embedded
+                inputs = self.decoder_initial_tokens_embedded
                 
                 # decoder loop
                 for _ in range(self.decoder_max_time_steps):
                     # decode one step
+                    
+                    c_i = self.attention(state[-1], encoder_outputs=self.encoder_outputs_unstack)
+                    inputs = tf.concat([inputs, c_i], axis=1)
+                    
                     # input: [batch_size, embedding_size]
                     # state:
                     output, state = self.decoder_cell(
-                        inputs=input,
+                        inputs=inputs,
                         state=state)
                     
                     logits = tf.layers.dense(inputs=output,
@@ -427,7 +431,7 @@ class Seq2SeqAttentionModel():
                     scores = tf.reduce_max(probabilities, -1)
                     
                     # next input
-                    input = tf.nn.embedding_lookup(params=self.decoder_embeddings,
+                    inputs = tf.nn.embedding_lookup(params=self.decoder_embeddings,
                                                    ids=predicts)
                     
                     self.decoder_last_state = state

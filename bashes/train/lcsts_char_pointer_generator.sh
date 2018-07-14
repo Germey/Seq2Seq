@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-cd ..
+cd ../..
 python3 train.py\
     --model_class pointer_generator\
     --batch_size 256\
