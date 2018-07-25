@@ -3,7 +3,7 @@ cd ../..
 python3 inference.py\
     --beam_width 1\
     --inference_batch_size 256\
-    --model_path checkpoints/lcsts_split_pointer_generator/lcsts.ckpt-805000\
+    --model_path checkpoints/lcsts_split_pointer_generator/lcsts.ckpt-685000\
     --inference_input dataset/lcsts/split/sources.test.txt\
-    --inference_output dataset/lcsts/split/summaries.inference.txt\
+    --inference_output dataset/lcsts/split/summaries.inference.685000.txt\
     --extend_vocabs True

@@ -4,8 +4,9 @@ import json
 
 # config
 base_path = './scores/lcsts_split_pointer_generator'
-hypothesis_file = 'summaries.inference.txt'
+hypothesis_file = 'summaries.inference.685000.txt'
 reference_file = 'summaries.test.txt'
+result_file = 'score.685000.json'
 
 
 def load_file(file):
@@ -33,5 +34,5 @@ scores = rouge.get_scores(hypothesis, reference, avg=True)
 
 # output
 print(json.dumps(scores, indent=2))
-with open(join(base_path, 'score.json'), 'w', encoding='utf-8') as f:
+with open(join(base_path, result_file), 'w', encoding='utf-8') as f:
     f.write(json.dumps(scores, indent=2))

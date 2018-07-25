@@ -28,4 +28,4 @@ python3 train.py\
     --extend_vocabs True\
     --split_vocabs True\
     --pre_train True\
-    --pre_trained_model checkpoints/lcsts_split_pointer_generator/lcsts.ckpt-805000
+    --pre_trained_model checkpoints/lcsts_split_pointer_generator/lcsts.ckpt-685000
