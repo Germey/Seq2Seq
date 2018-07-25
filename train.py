@@ -160,7 +160,7 @@ def train():
                                split_sign=FLAGS.split_sign,
                                max_length=None,
                                )
-
+    
     if FLAGS.source_valid_data and FLAGS.target_valid_data:
         logger.info('Loading validation data...')
         valid_set = BiTextIterator(source=FLAGS.source_valid_data,
