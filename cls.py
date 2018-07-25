@@ -7,6 +7,7 @@ def get_model_class(model_class):
         'seq2seq_attention': Seq2SeqAttentionModel,
         'pointer_generator': PointerGeneratorModel,
         'pointer_generator_coverage': PointerGeneratorCoverageModel,
+        'pointer_generator_coverage_limit': PointerGeneratorCoverageLimitModel,
         'pointer_generator_limit': PointerGeneratorLimitModel,
         'debug_pointer_generator_limit': DebugPointerGeneratorLimitModel,
         'debug_pointer_generator': DebugPointerGeneratorModel,
