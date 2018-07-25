@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 cd ../..
 python3 train.py\
-    --model_class debug_pointer_generator_limit\
+    --model_class pointer_generator_limit\
     --batch_size 256\
     --hidden_units 400\
     --embedding_size 300\

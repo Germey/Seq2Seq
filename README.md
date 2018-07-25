@@ -14,6 +14,8 @@ CUDA_VISIBLE_DEVICES=0 sh couplet_seq2seq.sh
 ```
 screen -t couplet_seq2seq_attention -S couplet_seq2seq_attention -L
 CUDA_VISIBLE_DEVICES=1 sh couplet_seq2seq_attention.sh
+screen -t lcsts_split_pointer_generator_limit -S lcsts_split_pointer_generator_limit -L
+CUDA_VISIBLE_DEVICES=1 sh lcsts_split_pointer_generator_limit.sh
 ```
 
 ## Usage of LCSTS
