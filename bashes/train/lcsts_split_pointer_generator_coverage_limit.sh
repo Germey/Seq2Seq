@@ -11,7 +11,7 @@ python3 train.py\
     --encoder_max_time_steps 80\
     --decoder_max_time_steps 25\
     --display_freq 5\
-    --save_freq 2000\
+    --save_freq 5000\
     --valid_freq 400\
     --model_dir checkpoints/lcsts_split_pointer_generator_coverage_limit\
     --model_name lcsts.ckpt\
