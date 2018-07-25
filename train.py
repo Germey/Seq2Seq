@@ -8,7 +8,7 @@ import tensorflow as tf
 from os.path import join
 from utils.iterator import BiTextIterator
 from tqdm import tqdm
-from utils.funcs import prepare_pair_batch, get_summary
+from utils.funcs import prepare_pair_batch, get_summary, remove_variable_suffix, add_variable_suffix
 import os
 import logging
 from cls import get_model_class
@@ -63,6 +63,8 @@ tf.app.flags.DEFINE_boolean('shuffle_each_epoch', False, 'Shuffle training datas
 tf.app.flags.DEFINE_boolean('sort_by_length', False, 'Sort pre-fetched mini batches by their target sequence lengths')
 tf.app.flags.DEFINE_boolean('extend_vocabs', False, 'Whether to extend oov vocabs')
 tf.app.flags.DEFINE_boolean('split_vocabs', False, 'Whether to split oov vocabs')
+tf.app.flags.DEFINE_boolean('pre_train', False, 'Whether to continue with pre-trained model')
+tf.app.flags.DEFINE_string('pre_trained_model', '', 'Pre-trained model')
 
 # Runtime parameters
 tf.app.flags.DEFINE_string('gpu', '-1', 'GPU number')
@@ -95,7 +97,38 @@ def create_model(session, config):
     if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
         logger.info('Reloading model parameters..')
         model.restore(session, ckpt.model_checkpoint_path)
-    
+    elif config['pre_train']:
+        reader = tf.train.NewCheckpointReader(config['pre_trained_model'])
+        saved_variables = reader.get_variable_to_shape_map()
+        
+        # get saved variables
+        saved_variable_names = []
+        for saved_variable_name, saved_variable_shape in saved_variables.items():
+            saved_variable_names.append(saved_variable_name)
+        
+        print('saved_variable_names', saved_variable_names)
+        
+        # get restored variables
+        restored_variables = []
+        all_variable_names = [remove_variable_suffix(v.name) for v in tf.all_variables()]
+        with tf.variable_scope('', reuse=tf.AUTO_REUSE):
+            for variable_name in saved_variable_names:
+                if variable_name in all_variable_names:
+                    variable = tf.get_default_graph().get_tensor_by_name(add_variable_suffix(variable_name))
+                    restored_variables.append(variable)
+        
+        print('Restored', restored_variables)
+        
+        # restore saved variables
+        model.restore(session, config['pre_trained_model'], var_list=restored_variables)
+        
+        # init extra variables
+        extra_variables = [v for v in tf.all_variables() if
+                           remove_variable_suffix(v.name) not in saved_variable_names]
+        print('extra_variables', extra_variables)
+        session.run(tf.variables_initializer(var_list=extra_variables))
+        
+        print('global_epoch_step', session.run(model.global_step))
     else:
         if not os.path.exists(FLAGS.model_dir):
             os.makedirs(FLAGS.model_dir)
@@ -127,7 +160,7 @@ def train():
                                split_sign=FLAGS.split_sign,
                                max_length=None,
                                )
-    
+
     if FLAGS.source_valid_data and FLAGS.target_valid_data:
         logger.info('Loading validation data...')
         valid_set = BiTextIterator(source=FLAGS.source_valid_data,

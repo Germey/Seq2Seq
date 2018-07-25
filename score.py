@@ -3,7 +3,7 @@ from os.path import join
 import json
 
 # config
-base_path = './scores/lcsts_word_seq2seq/word'
+base_path = './scores/lcsts_split_pointer_generator'
 hypothesis_file = 'summaries.inference.txt'
 reference_file = 'summaries.test.txt'
 
@@ -18,7 +18,10 @@ def load_file(file):
         results = f.read().split('\n')
         results = list(filter(lambda x: x, results))
         print(len(results))
+        results = [result.replace(' ', '') for result in results]
+        results = [' '.join(list(result)) for result in results]
         return results
+
 
 # load files
 hypothesis = load_file(hypothesis_file)

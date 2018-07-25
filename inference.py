@@ -72,7 +72,7 @@ def seq2words(seq, inverse_target_dictionary, oovs_vocab=None):
             if result == 'UNK':
                 words.append(result)
             else:
-                words += list(result)
+                words.append(result)
         else:
             words.append(UNK)
     return ' '.join(words)

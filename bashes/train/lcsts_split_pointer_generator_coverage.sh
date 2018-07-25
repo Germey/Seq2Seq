@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+cd ../..
+python3 train.py\
+    --model_class pointer_generator_coverage\
+    --batch_size 256\
+    --hidden_units 400\
+    --embedding_size 300\
+    --attention_units 250\
+    --encoder_depth 3\
+    --decoder_depth 3\
+    --encoder_max_time_steps 80\
+    --decoder_max_time_steps 25\
+    --display_freq 5\
+    --save_freq 2000\
+    --valid_freq 400\
+    --model_dir checkpoints/lcsts_split_pointer_generator_coverage\
+    --model_name lcsts.ckpt\
+    --source_vocabulary dataset/lcsts/split/vocabs.json\
+    --target_vocabulary dataset/lcsts/split/vocabs.json\
+    --source_train_data dataset/lcsts/split/sources.train.txt\
+    --target_train_data dataset/lcsts/split/summaries.train.txt\
+    --source_valid_data dataset/lcsts/split/sources.eval.txt\
+    --target_valid_data dataset/lcsts/split/summaries.eval.txt\
+    --encoder_vocab_size 34653\
+    --decoder_vocab_size 34653\
+    --cell_type gru\
+    --max_epochs 100000\
+    --extend_vocabs True\
+    --split_vocabs True\
+    --pre_train True\
+    --pre_trained_model checkpoints/lcsts_split_pointer_generator/lcsts.ckpt-805000

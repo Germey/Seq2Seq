@@ -123,3 +123,11 @@ def prepare_pair_batch(seqs_x, seqs_y, x_max_length=None, y_max_length=None):
         x[idx, :lengths_x[idx]] = s_x
         y[idx, :lengths_y[idx]] = s_y
     return x, x_lengths, y, y_lengths
+
+
+def add_variable_suffix(var_name):
+    return var_name + ':0'
+
+
+def remove_variable_suffix(var_name):
+    return var_name.split(':0')[0]
