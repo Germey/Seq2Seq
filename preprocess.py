@@ -5,7 +5,7 @@ from os.path import exists, join
 from os import makedirs
 from preprocess.pipeline import *
 
-output_dir = join('dataset', 'lcsts', 'char')
+output_dir = join('dataset', 'bytecup', 'word')
 
 vocab_size_limit = 30000
 
@@ -16,9 +16,9 @@ if not exists(output_dir):
 # pipelines and writer to process data
 pipelines = [
     StripPipeline(),
-    ReplacePipeline(),
+    # ReplacePipeline(),
     # JiebaPipeline(),
-    CharPipeline()
+    # CharPipeline()
 ]
 
 writer = Writer(folder=output_dir)
