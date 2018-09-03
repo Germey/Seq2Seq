@@ -57,7 +57,7 @@ if train_flag:
     #     print('Running', pipeline)
     #     sources = pipeline.process_all(sources)
     #     summaries = pipeline.process_all(summaries)
-    
+    print('Sources', len(sources))
     # get vocabs of articles and summaries, they use the same vocabs
     word2id, id2word = vocab_transformer.build_vocabs(sources)
     

@@ -8,8 +8,8 @@ python3 train.py\
     --attention_units 250\
     --encoder_depth 3\
     --decoder_depth 3\
-    --encoder_max_time_steps 2000\
-    --decoder_max_time_steps 25\
+    --encoder_max_time_steps 1500\
+    --decoder_max_time_steps 30\
     --display_freq 5\
     --save_freq 2000\
     --valid_freq 400\

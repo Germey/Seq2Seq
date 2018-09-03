@@ -20,6 +20,7 @@ class VocabTransformer(object):
         result = []
         for line in data:
             result.append(line.split(config.SEGMENT_JOIN_FLAG))
+        print('Total Words', len(result))
         return result
     
     def build_vocabs(self, data):
@@ -30,6 +31,7 @@ class VocabTransformer(object):
         """
         # split lines
         data = self.split_lines(data)
+        print('Building Vocabs...')
         # merge all words
         all_words = list(chain(*data))
         # all words to Series
@@ -44,7 +46,7 @@ class VocabTransformer(object):
         
         if self.limit >= 0:
             all_words_set = all_words_set[:self.limit]
-        
+        print('All words', len(all_words_set))
         # get words ids
         all_words_ids = range(len(all_words_set))
         
