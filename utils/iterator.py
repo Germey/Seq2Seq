@@ -146,7 +146,7 @@ class BiTextIterator():
                  encoding='utf-8',
                  split_sign=' '):
         
-        assert source_dict == target_dict
+        # assert source_dict == target_dict
         
         self.source = open(source, 'r', encoding=encoding)
         self.target = open(target, 'r', encoding=encoding)
