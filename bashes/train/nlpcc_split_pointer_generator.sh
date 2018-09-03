@@ -6,8 +6,8 @@ python3 train.py\
     --hidden_units 200\
     --embedding_size 200\
     --attention_units 250\
-    --encoder_depth 3\
-    --decoder_depth 3\
+    --encoder_depth 1\
+    --decoder_depth 1\
     --encoder_max_time_steps 1000\
     --decoder_max_time_steps 35\
     --display_freq 5\
