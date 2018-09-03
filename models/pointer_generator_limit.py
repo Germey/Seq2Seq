@@ -126,7 +126,7 @@ class PointerGeneratorLimitModel():
             self.logger.debug('decoder_inputs_inference %s', self.decoder_inputs_inference)
             
             self.decoder_inputs_inference_length = tf.ones(shape=[self.batch_size], dtype=tf.int32,
-                                                           name='decoder_inputs_inference_length')
+                                                           name='decoder_inputs_inference_length') * (15 + 1)
             self.logger.debug('decoder_inputs_inference_length %s', self.decoder_inputs_inference_length)
         
         with tf.variable_scope('attention'):
@@ -501,9 +501,16 @@ class PointerGeneratorLimitModel():
                 self.logger.debug('decoder_initial_tokens_embedded %s', self.decoder_initial_tokens_embedded)
                 
                 inputs = self.decoder_initial_tokens_embedded
+                
+                length = self.decoder_inputs_inference_length
+                
                 with tf.variable_scope('loop', reuse=tf.AUTO_REUSE):
                     
                     for _ in range(self.decoder_max_time_steps):
+                        # length_embedded: [batch_size, embedding_size]
+                        length_embedded = tf.nn.embedding_lookup(params=self.length_embeddings,
+                                                                 ids=length)
+                        
                         c_i, alpha_i = self.attention(state[-1], encoder_outputs=self.encoder_outputs_unstack)
                         
                         # p_gen_dense: [batch_size, 1]
@@ -516,7 +523,7 @@ class PointerGeneratorLimitModel():
                         p_gen = tf.nn.sigmoid(p_gen_dense, name='p_gen_sigmoid')
                         self.logger.debug('p_gen %s', p_gen)
                         
-                        inputs = tf.concat([inputs, c_i], axis=1)
+                        inputs = tf.concat([inputs, c_i, length_embedded], axis=1)
                         outputs, state = self.decoder_cell(inputs=inputs, state=state)
                         
                         # outputs_logits: [batch_size, decoder_vocab_size]
@@ -536,6 +543,11 @@ class PointerGeneratorLimitModel():
                                                                      self.oovs_max_size)
                         
                         self.logger.debug('final_distribution %s', final_distribution)
+                        
+                        length = tf.cast(tf.multiply(tf.cast(length > 0, tf.float32), tf.ones([self.batch_size]) * -1),
+                                         tf.int32) + length
+                        
+                        self.logger.debug('length %s', length)
                         
                         self.decoder_probabilities.append(final_distribution)
                         

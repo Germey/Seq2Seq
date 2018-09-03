@@ -5,5 +5,5 @@ python3 inference.py\
     --inference_batch_size 256\
     --model_path checkpoints/lcsts_split_pointer_generator_limit/lcsts.ckpt-690000\
     --inference_input dataset/lcsts/split/sources.test.txt\
-    --inference_output dataset/lcsts/split/summaries.inference.limit.690000.txt\
+    --inference_output dataset/lcsts/split/summaries.inference.limit.15.690000.txt\
     --extend_vocabs True

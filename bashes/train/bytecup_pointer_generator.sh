@@ -2,18 +2,18 @@
 cd ../..
 python3 train.py\
     --model_class pointer_generator\
-    --batch_size 32\
-    --hidden_units 400\
-    --embedding_size 300\
+    --batch_size 8\
+    --hidden_units 200\
+    --embedding_size 220\
     --attention_units 250\
-    --encoder_depth 3\
-    --decoder_depth 3\
+    --encoder_depth 2\
+    --decoder_depth 2\
     --encoder_max_time_steps 1200\
     --decoder_max_time_steps 20\
     --display_freq 5\
     --save_freq 2000\
     --valid_freq 400\
-    --model_dir checkpoints/bytecup_pointer_generator\
+    --model_dir checkpoints/bytecup_pointer_generator_large\
     --model_name lcsts.ckpt\
     --source_vocabulary dataset/bytecup/word/vocabs.json\
     --target_vocabulary dataset/bytecup/word/vocabs.json\
