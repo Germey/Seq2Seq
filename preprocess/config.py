@@ -52,8 +52,8 @@ SEGMENT_WORDS = [
     TIME_PLACEHOLDER
 ]
 
-GO = 'GO'
-EOS = 'EOS'  # also function as PAD
-UNK = 'UNK'
+GO = '<GO>'
+EOS = '<EOS>'  # also function as PAD
+UNK = '<UNK>'
 
 MAX_LENGTH = 1000
