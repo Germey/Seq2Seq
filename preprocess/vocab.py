@@ -1,6 +1,6 @@
 from itertools import chain
 import pandas as pd
-import config
+from . import config
 
 
 class VocabTransformer(object):
