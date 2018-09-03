@@ -2,14 +2,14 @@
 cd ../..
 python3 train.py\
     --model_class pointer_generator\
-    --batch_size 16\
-    --hidden_units 300\
-    --embedding_size 300\
+    --batch_size 5\
+    --hidden_units 200\
+    --embedding_size 200\
     --attention_units 250\
     --encoder_depth 3\
     --decoder_depth 3\
     --encoder_max_time_steps 1000\
-    --decoder_max_time_steps 40\
+    --decoder_max_time_steps 35\
     --display_freq 5\
     --save_freq 1000\
     --valid_freq 400\
