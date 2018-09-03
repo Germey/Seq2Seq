@@ -30,7 +30,7 @@ tf.app.flags.DEFINE_string('target_valid_data', 'dataset/couplet/valid.y.txt',
 tf.app.flags.DEFINE_string('model_class', 'pointer_generator_coverage', 'Model class')
 tf.app.flags.DEFINE_string('cell_type', 'gru', 'RNN cell for encoder and decoder, default: lstm')
 tf.app.flags.DEFINE_string('attention_type', 'bahdanau', 'Attention mechanism: (bahdanau, luong), default: bahdanau')
-tf.app.flags.DEFINE_integer('hidden_units', 500, 'Number of hidden units in each layer')
+tf.app.flags.DEFINE_integer('hidden_units', 400, 'Number of hidden units in each layer')
 tf.app.flags.DEFINE_integer('attention_units', 256, 'Number of attention units in each layer')
 tf.app.flags.DEFINE_integer('encoder_depth', 3, 'Number of layers in encoder')
 tf.app.flags.DEFINE_integer('decoder_depth', 3, 'Number of layers in decoder')
