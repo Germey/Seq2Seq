@@ -188,14 +188,15 @@ class PointerGeneratorCoverageModel():
         :return: None
         """
         with tf.variable_scope('encoder') as scope:
-            # encoder_embeddings: [encoder_vocab_size, embedding_size]
-            self.encoder_embeddings = tf.get_variable(name='embedding',
-                                                      shape=[self.encoder_vocab_size, self.embedding_size],
-                                                      dtype=self.dtype,
-                                                      initializer=tf.random_uniform_initializer(-math.sqrt(3),
-                                                                                                math.sqrt(3),
-                                                                                                dtype=self.dtype))
-            self.logger.debug('encoder_embeddings %s', self.encoder_embeddings)
+            with tf.device('/cpu:0'):
+                # encoder_embeddings: [encoder_vocab_size, embedding_size]
+                self.encoder_embeddings = tf.get_variable(name='embedding',
+                                                          shape=[self.encoder_vocab_size, self.embedding_size],
+                                                          dtype=self.dtype,
+                                                          initializer=tf.random_uniform_initializer(-math.sqrt(3),
+                                                                                                    math.sqrt(3),
+                                                                                                    dtype=self.dtype))
+                self.logger.debug('encoder_embeddings %s', self.encoder_embeddings)
             
             # encoder_inputs_embedded : [batch_size, encoder_time_steps, embedding_size]
             self.encoder_inputs_embedded = tf.nn.embedding_lookup(params=self.encoder_embeddings,
@@ -345,14 +346,14 @@ class PointerGeneratorCoverageModel():
             
             self.decoder_cell = self.build_decoder_cell()
             self.logger.debug('decoder_cell %s', self.decoder_cell)
-            
-            # decoder_embeddings: [decoder_vocab_size, embedding_size]
-            self.decoder_embeddings = tf.get_variable(name='embedding',
-                                                      shape=[self.decoder_vocab_size, self.embedding_size],
-                                                      dtype=self.dtype,
-                                                      initializer=tf.random_uniform_initializer(-math.sqrt(3),
-                                                                                                math.sqrt(3),
-                                                                                                dtype=self.dtype))
+            with tf.device('/cpu:0'):
+                # decoder_embeddings: [decoder_vocab_size, embedding_size]
+                self.decoder_embeddings = tf.get_variable(name='embedding',
+                                                          shape=[self.decoder_vocab_size, self.embedding_size],
+                                                          dtype=self.dtype,
+                                                          initializer=tf.random_uniform_initializer(-math.sqrt(3),
+                                                                                                    math.sqrt(3),
+                                                                                                    dtype=self.dtype))
             self.logger.debug('decoder_embeddings %s', self.decoder_embeddings)
             
             # encoder_outputs_unstack: encoder_time_steps * [batch_size, hidden_units]

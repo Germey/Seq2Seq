@@ -28,7 +28,7 @@ train_flag, eval_flag, test_flag = True, False, False
 
 if train_flag:
     # train
-    sources_file = './dataset/bytecup/contents.txt'
+    sources_file = './dataset/bytecup/word/contents.txt'
     # summaries_file = './dataset/bytecup/titles.train.txt'
     
     sources = []
@@ -66,7 +66,7 @@ if train_flag:
     # writer.write_to_txt(summaries, 'summaries.train.txt')
     
     # write vocab to json
-    writer.write_to_json(word2id, 'vocabs.json')
+    writer.write_to_json(word2id, 'vocabs_lower.json')
 
 if eval_flag:
     
