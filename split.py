@@ -1,8 +1,8 @@
 from sklearn.model_selection import train_test_split
 from os.path import join
 
-input_dir = './dataset/bytecup'
-output_dir = './dataset/bytecup'
+input_dir = './dataset/bytecup/token'
+output_dir = './dataset/bytecup/token'
 
 contents = []
 for line in open(join(input_dir, 'contents.txt'), encoding='utf-8').readlines():

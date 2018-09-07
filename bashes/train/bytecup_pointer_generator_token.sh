@@ -13,14 +13,14 @@ python3 train.py\
     --display_freq 5\
     --save_freq 2000\
     --valid_freq 400\
-    --model_dir checkpoints/bytecup_pointer_generator\
+    --model_dir checkpoints/bytecup_pointer_generator_token\
     --model_name lcsts.ckpt\
-    --source_vocabulary dataset/bytecup/word/vocabs.json\
-    --target_vocabulary dataset/bytecup/word/vocabs.json\
-    --source_train_data dataset/bytecup/word/contents.eval.txt\
-    --target_train_data dataset/bytecup/word/titles.eval.txt\
-    --source_valid_data dataset/bytecup/word/contents.eval.txt\
-    --target_valid_data dataset/bytecup/word/titles.eval.txt\
+    --source_vocabulary dataset/bytecup/token/vocabs.json\
+    --target_vocabulary dataset/bytecup/token/vocabs.json\
+    --source_train_data dataset/bytecup/token/contents.train.txt\
+    --target_train_data dataset/bytecup/token/titles.train.txt\
+    --source_valid_data dataset/bytecup/token/contents.eval.txt\
+    --target_valid_data dataset/bytecup/token/titles.eval.txt\
     --encoder_vocab_size 30000\
     --decoder_vocab_size 30000\
     --cell_type gru\
