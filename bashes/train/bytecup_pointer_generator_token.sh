@@ -11,7 +11,7 @@ python3 train.py\
     --encoder_max_time_steps 1000\
     --decoder_max_time_steps 20\
     --display_freq 5\
-    --save_freq 2000\
+    --save_freq 1000\
     --valid_freq 400\
     --model_dir checkpoints/bytecup_pointer_generator_token\
     --model_name lcsts.ckpt\
