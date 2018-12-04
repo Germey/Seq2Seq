@@ -1,6 +1,7 @@
 from .seq2seq import Seq2SeqModel
 from .seq2seq_attention import Seq2SeqAttentionModel
 from .pointer_generator import PointerGeneratorModel
+from .pointer_generator_lab import PointerGeneratorLabModel
 from .pointer_generator_coverage import PointerGeneratorCoverageModel
 from .pointer_generator_limit import PointerGeneratorLimitModel
 from .pointer_generator_coverage_limit import PointerGeneratorCoverageLimitModel

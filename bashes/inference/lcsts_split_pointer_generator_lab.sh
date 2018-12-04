@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 cd ../..
-python3 inference.py\
+python3 lab.py\
     --beam_width 1\
     --inference_batch_size 1\
     --model_path checkpoints/lcsts_split_pointer_generator/lcsts.ckpt-685000\

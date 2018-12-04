@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+cd ../..
+python3 inference.py\
+    --beam_width 1\
+    --inference_batch_size 5\
+    --model_path checkpoints/nlpcc_split_pointer_generator/lcsts.ckpt-485000\
+    --inference_input dataset/nlpcc/sources.eval.txt\
+    --inference_output dataset/nlpcc/summaries.test.485000.txt\
+    --extend_vocabs True
