@@ -4,6 +4,7 @@ from .pointer_generator import PointerGeneratorModel
 from .pointer_generator_lab import PointerGeneratorLabModel
 from .pointer_generator_coverage import PointerGeneratorCoverageModel
 from .pointer_generator_limit import PointerGeneratorLimitModel
+from .pointer_generator_limit_lab import PointerGeneratorLimitLabModel
 from .pointer_generator_coverage_limit import PointerGeneratorCoverageLimitModel
 from .debug_pointer_generator_limit import DebugPointerGeneratorLimitModel
 from .debug_pointer_generator import DebugPointerGeneratorModel

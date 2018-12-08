@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+cd ../..
+python3 train.py\
+    --model_class pointer_generator_limit\
+    --batch_size 3\
+    --hidden_units 140\
+    --embedding_size 130\
+    --attention_units 200\
+    --encoder_depth 1\
+    --decoder_depth 1\
+    --encoder_max_time_steps 1000\
+    --decoder_max_time_steps 30\
+    --display_freq 5\
+    --save_freq 1000\
+    --valid_freq 400\
+    --model_dir checkpoints/nlpcc_split_pointer_generator_limit\
+    --model_name nlpcc.ckpt\
+    --source_vocabulary dataset/nlpcc/vocabs.json\
+    --target_vocabulary dataset/nlpcc/vocabs.json\
+    --source_train_data dataset/nlpcc/sources.train.txt\
+    --target_train_data dataset/nlpcc/summaries.train.txt\
+    --source_valid_data dataset/nlpcc/sources.eval.txt\
+    --target_valid_data dataset/nlpcc/summaries.eval.txt\
+    --encoder_vocab_size 34653\
+    --decoder_vocab_size 34653\
+    --cell_type gru\
+    --max_epochs 100000\
+    --extend_vocabs True\
+    --split_vocabs True\

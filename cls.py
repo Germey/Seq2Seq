@@ -10,6 +10,7 @@ def get_model_class(model_class):
         'pointer_generator_coverage': PointerGeneratorCoverageModel,
         'pointer_generator_coverage_limit': PointerGeneratorCoverageLimitModel,
         'pointer_generator_limit': PointerGeneratorLimitModel,
+        'pointer_generator_limit_lab': PointerGeneratorLimitLabModel,
         'debug_pointer_generator_limit': DebugPointerGeneratorLimitModel,
         'debug_pointer_generator': DebugPointerGeneratorModel,
         'debug_pointer_generator_coverage': DebugPointerGeneratorCoverageModel,

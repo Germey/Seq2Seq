@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 cd ../..
-python3 inference.py\
+python3 lab.py\
     --beam_width 1\
     --inference_batch_size 5\
     --model_path checkpoints/bytecup_pointer_generator_token/lcsts.ckpt-220000\
     --inference_input dataset/bytecup/token/content.test.txt\
-    --inference_output dataset/bytecup/token/title.inference.220000.txt\
+    --inference_output dataset/bytecup/token/title.inference.220000.lab.last.filter.txt\
     --extend_vocabs True

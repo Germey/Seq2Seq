@@ -5,5 +5,5 @@ python3 lab.py\
     --inference_batch_size 1\
     --model_path checkpoints/nlpcc_split_pointer_generator/lcsts.ckpt-485000\
     --inference_input dataset/nlpcc/sources.eval.txt\
-    --inference_output dataset/nlpcc/summaries.test.last.filter.txt\
+    --inference_output dataset/nlpcc/summaries.test.all.filter.txt\
     --extend_vocabs True

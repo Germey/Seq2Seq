@@ -3,10 +3,11 @@ from os.path import join
 import json
 
 # config
-base_path = './scores/lcsts_word_pointer_generator_coverage/word/'
-hypothesis_file = 'summaries.inference.txt'
+base_path = './scores/lcsts_split_pointer_generator_limit/'
+hypothesis_file = 'summaries.inference.limit.15.last.filter.txt'
+# hypothesis_file = 'summaries.eval.2.txt'
 reference_file = 'summaries.test.txt'
-result_file = 'score.json'
+result_file = 'score.inference.limit.15.last.filter.json'
 
 
 def load_file(file):
