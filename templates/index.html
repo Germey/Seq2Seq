@@ -1,0 +1,87 @@
+<script src="/static/js/vue.js"></script>
+<script src="/static/js/element.js"></script>
+<script src="/static/js/jquery.min.js"></script>
+<link rel="stylesheet" href="/static/css/element.css">
+<link rel="stylesheet" href="/static/css/bootstrap.min.css">
+<div id="app">
+	<el-row>
+		<el-col :span="18" :offset="3">
+			<el-card class="box-card">
+				<h2 class="text-center">
+					生成式自动文本摘要系统
+				</h2>
+				<p>
+					请输入待分析的文本：
+				</p>
+				<div class="m-b">
+					<el-input
+						type="textarea"
+						:rows="2"
+						placeholder="请输入内容"
+						v-model="source">
+					</el-input>
+				</div>
+				<p>
+					请选择生成模型：
+				</p>
+				<div class="m-b">
+					<el-radio v-model="lengthControl" :label="true">控制长度</el-radio>
+					<el-radio v-model="lengthControl" :label="false">无长度限制</el-radio>
+				</div>
+				<p v-show="lengthControl">请输入词数</p>
+				<div class="m-b" v-show="lengthControl">
+					<el-input placeholder="请输入词数">
+						<template slot="append">词</template>
+					</el-input>
+				</div>
+				<p>
+					摘要生成结果：
+				</p>
+				<div class="m-b">
+					<el-input
+						type="textarea"
+						:rows="2"
+						placeholder="摘要结果"
+						v-model="summarization">
+					</el-input>
+				</div>
+				<el-row>
+					<el-button type="primary" @click="summarize">提交</el-button>
+				</el-row>
+			</el-card>
+		</el-col>
+	</el-row>
+</div>
+<style>
+	.m-b {
+		margin-bottom: 15px;
+	}
+</style>
+<script>
+	new Vue({
+		el: '#app',
+		data() {
+			return {
+				source: '正处于风口浪尖的国内奶粉行业出现大交易。蒙牛乳业（02319.HK）以及雅士利（01230.HK）昨日发布公告称，蒙牛乳业将斥资81.5亿港元收购雅士利约65.4%股权。业界称，此举有助于蒙牛乳业补上奶粉短板，以期重新超越伊利成为行业领头羊。',
+				lengthControl: false,
+				summarization: null,
+			}
+		},
+		methods: {
+			summarize() {
+				$.ajax({
+					data: {
+						source: this.source
+					},
+					url: '/summarize',
+					dataType: 'json',
+					success: (data) => {
+						console.log(data)
+						this.summarization = data.summarization
+					}
+				})
+			}
+		}
+	})
+
+</script>

@@ -129,6 +129,7 @@ def decode():
                     result = seq2words(predict_seq, inverse_target_dictionary=target_inverse_dict,
                                        oovs_vocab=inverse_dict(oovs_vocab))
                     logger.info('result %s', result)
+                    print(result)
                     fout.write(result + '\n')
                 logger.info('%s lines processed', line_number)
             else:
