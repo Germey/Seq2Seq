@@ -60,6 +60,24 @@ def load_model(session, config):
     return model
 
 
+def attention_data(attention, source, summarization):
+    """
+    get attention data for echarts
+    :param attention:
+    :param source:
+    :param summarization:
+    :return:
+    """
+    source_length = len(source.strip().split())
+    summarization_length = len(summarization.strip().split())
+    result = []
+    attention = attention.tolist()
+    for i in range(summarization_length):
+        for j in range(source_length):
+            result.append([j, i, round(attention[i][j], 2)])
+    return result, source.split(), summarization.split()
+
+
 def seq2words(seq, inverse_target_dictionary, oovs_vocab=None):
     words = []
     if oovs_vocab:
@@ -111,12 +129,12 @@ app = Flask(__name__)
 
 @app.route('/summarize', methods=['GET'])
 def summarize():
-    source = request.args.get('source')
-    source = space.join(jieba.lcut(source.replace(space, '')))
+    source_text = request.args.get('source')
+    source_text = space.join(jieba.lcut(source_text.replace(space, '')))
     
     with open(FLAGS.inference_input, 'w', encoding='utf-8') as f:
-        f.write(source)
-    print('Processing', source)
+        f.write(source_text)
+    print('Processing', source_text)
     test_set = UniTextIterator(source=config['inference_input'],
                                split_sign=config['split_sign'],
                                batch_size=config['inference_batch_size'],
@@ -124,31 +142,39 @@ def summarize():
                                n_words_source=config['encoder_vocab_size'])
     
     test_set.reset()
-    result, probabilities, p_gens, scores = None, None, None, None
+    summarization_text, probabilities, p_gens, scores, attn = None, None, None, None, None
     for idx, batch in enumerate(test_set.next(extend=FLAGS.extend_vocabs)):
         source_batch, source_extend_batch, oovs_max_size, oovs_vocabs = batch
         
         source, source_len = prepare_batch(source_batch, config['encoder_max_time_steps'])
         source_extend, _ = prepare_batch(source_extend_batch, config['encoder_max_time_steps'])
         
-        predicts, scores, probabilities, p_gens, greater_indices = model.inference(sess,
-                                                                                   encoder_inputs=source,
-                                                                                   encoder_inputs_extend=source_extend,
-                                                                                   encoder_inputs_length=source_len,
-                                                                                   oovs_max_size=oovs_max_size)
+        predicts, scores, probabilities, p_gens, greater_indices, attns = model.inference(sess,
+                                                                                          encoder_inputs=source,
+                                                                                          encoder_inputs_extend=source_extend,
+                                                                                          encoder_inputs_length=source_len,
+                                                                                          oovs_max_size=oovs_max_size)
         print('Shape', predicts.shape, scores.shape, probabilities.shape, p_gens.shape)
-        for predict_seq, score_seq, prob_seq, p_gen_seq, oovs_vocab in zip(predicts, scores, probabilities,
-                                                                           p_gens, oovs_vocabs):
+        for predict_seq, score_seq, prob_seq, p_gen_seq, oovs_vocab, attn in zip(predicts, scores, probabilities,
+                                                                                 p_gens, oovs_vocabs, attns):
             print('Score', score_seq, 'predict_seq', predict_seq, 'p_gen_seq', p_gen_seq)
-            result = seq2words(predict_seq, inverse_target_dictionary=target_inverse_dict,
-                               oovs_vocab=inverse_dict(oovs_vocab))
-            logger.info('result %s', result)
-            fout.write(result + '\n')
+            print('Attns', attns)
+            summarization_text = seq2words(predict_seq, inverse_target_dictionary=target_inverse_dict,
+                                           oovs_vocab=inverse_dict(oovs_vocab))
+            logger.info('result %s', summarization_text)
+            fout.write(summarization_text + '\n')
+    
+    print('Attn', attn)
+    print('Attn shape', attn.shape)
+    
+    attns_data = attention_data(attn, source_text, summarization_text)
+    print(attns_data)
     
     logger.info('Finished!')
     return json.dumps({
-        'summarization': result,
+        'summarization': summarization_text,
         'gens': p_gens.tolist()[0],
+        'attentions': attns_data,
         # 'probabilities': probabilities.tolist()[0],
         'scores': scores.tolist()[0]
     }, ensure_ascii=False)

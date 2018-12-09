@@ -468,6 +468,7 @@ class PointerGeneratorLabModel():
                 self.decoder_p_gens = []
                 self.decoder_greater_indices = []
                 self.decoder_history = []
+                self.decoder_attentions = []
                 
                 # decoder_initial_tokens: [batch_size]
                 self.decoder_initial_tokens = tf.ones(shape=[self.batch_size], dtype=tf.int32,
@@ -513,6 +514,8 @@ class PointerGeneratorLabModel():
                         
                         # attention_distribution: [batch_size, encoder_inputs_length]
                         attention_distribution = alpha_i
+                        
+                        self.decoder_attentions.append(attention_distribution)
                         
                         # final_distribution: [batch_size, decoder_vocab_size + oovs_max_size]
                         final_distribution = self.merge_distribution(p_gen, attention_distribution, vocab_distribution,
@@ -608,6 +611,7 @@ class PointerGeneratorLabModel():
                 self.decoder_scores = tf.stack(self.decoder_scores, axis=1)
                 self.decoder_p_gens = tf.stack(self.decoder_p_gens, axis=1)
                 self.decoder_greater_indices = tf.stack(self.decoder_greater_indices, axis=1)
+                self.decoder_attentions = tf.stack(self.decoder_attentions, axis=1)
                 
                 self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
                 self.logger.debug('decoder_predicts %s', self.decoder_predicts)
@@ -788,7 +792,8 @@ class PointerGeneratorLabModel():
             self.decoder_scores,
             self.decoder_probabilities,
             self.decoder_p_gens,
-            self.decoder_greater_indices
+            self.decoder_greater_indices,
+            self.decoder_attentions
         ]
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs

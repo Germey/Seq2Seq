@@ -78,6 +78,7 @@ def seq2words(seq, inverse_target_dictionary, oovs_vocab=None):
     return ' '.join(words)
 
 
+
 def decode():
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
     
@@ -117,15 +118,16 @@ def decode():
                 source_extend, _ = prepare_batch(source_extend_batch, config['encoder_max_time_steps'])
                 line_number += len(source)
                 
-                predicts, scores, probabilities, p_gens, greater_indices = model.inference(sess,
+                predicts, scores, probabilities, p_gens, greater_indices, attns = model.inference(sess,
                                                                                            encoder_inputs=source,
                                                                                            encoder_inputs_extend=source_extend,
                                                                                            encoder_inputs_length=source_len,
                                                                                            oovs_max_size=oovs_max_size)
                 print('Shape', predicts.shape, scores.shape, probabilities.shape, p_gens.shape)
-                for predict_seq, score_seq, prob_seq, p_gen_seq, oovs_vocab in zip(predicts, scores, probabilities,
-                                                                                   p_gens, oovs_vocabs):
-                    print('Score', score_seq, 'predict_seq', predict_seq, 'p_gen_seq', p_gen_seq)
+                for predict_seq, score_seq, prob_seq, p_gen_seq, oovs_vocab, attn in zip(predicts, scores, probabilities,
+                                                                                   p_gens, oovs_vocabs, attns):
+                    print('Score', score_seq, 'predict_seq', predict_seq, 'p_gen_seq', p_gen_seq,)
+                    print('Attns', attns)
                     result = seq2words(predict_seq, inverse_target_dictionary=target_inverse_dict,
                                        oovs_vocab=inverse_dict(oovs_vocab))
                     logger.info('result %s', result)
