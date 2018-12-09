@@ -4,12 +4,12 @@
 <div id="app">
 	<el-menu :default-active="tabIndex" mode="horizontal" @select="tabChanged">
 		<span class="site-title">文本摘要系统</span>
-		<el-menu-item :index="1">抽取式摘要</el-menu-item>
-		<el-menu-item :index="2">生成式摘要</el-menu-item>
+		<el-menu-item index="1">抽取式摘要</el-menu-item>
+		<el-menu-item index="2">生成式摘要</el-menu-item>
 	</el-menu>
 	<el-row>
 		<el-col :span="18" :offset="3">
-			<el-card class="box-card">
+			<el-card class="box-card" v-if="mode=='abstractive'">
 				<div class="box-item">
 					<p class="box-item-label">
 						请输入待分析的文本
@@ -33,32 +33,33 @@
 						<el-radio v-model="lengthControl" :label="false">无长度限制</el-radio>
 					</div>
 				</div>
-				<div class="box-item">
+				<div class="box-item" v-show="lengthControl">
 					<p class="box-item-label">
 						请输入词数
 					</p>
-					<div class="m-b" v-show="lengthControl">
+					<div class="m-b">
 						<el-input placeholder="请输入词数">
 							<template slot="append">词</template>
 						</el-input>
 					</div>
 				</div>
-				<p v-show="lengthControl"></p>
+				<div class="box-item">
+					<p class="box-item-label">
+						摘要生成结果
+					</p>
+					<div class="m-b">
+						<el-input
+							type="textarea"
+							:rows="2"
+							placeholder="摘要结果"
+							v-model="summarization">
+						</el-input>
+					</div>
 
-				<p>
-					摘要生成结果：
-				</p>
-				<div class="m-b">
-					<el-input
-						type="textarea"
-						:rows="2"
-						placeholder="摘要结果"
-						v-model="summarization">
-					</el-input>
 				</div>
-				<el-row>
+				<div class="box-item">
 					<el-button type="primary" @click="summarize">提交</el-button>
-				</el-row>
+				</div>
 			</el-card>
 		</el-col>
 	</el-row>
@@ -98,7 +99,12 @@
 				source: '正处于风口浪尖的国内奶粉行业出现大交易。蒙牛乳业（02319.HK）以及雅士利（01230.HK）昨日发布公告称，蒙牛乳业将斥资81.5亿港元收购雅士利约65.4%股权。业界称，此举有助于蒙牛乳业补上奶粉短板，以期重新超越伊利成为行业领头羊。',
 				lengthControl: false,
 				summarization: null,
-				tabIndex: 1,
+				tabIndex: '2',
+				mode: 'abstractive',
+				modeMap: {
+					'1': 'extractive',
+					'2': 'abstractive'
+				}
 			}
 		},
 		methods: {
@@ -116,7 +122,7 @@
 				})
 			},
 			tabChanged(key, keyPath) {
-				console.log(key)
+				this.mode = this.modeMap[key]
 			}
 		}
 	})
