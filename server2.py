@@ -14,7 +14,7 @@ from cls import get_model_class
 tf.app.flags.DEFINE_integer('beam_width', 1, 'Beam width used in beam search')
 tf.app.flags.DEFINE_integer('inference_batch_size', 256, 'Batch size used for decoding')
 tf.app.flags.DEFINE_integer('max_inference_step', 60, 'Maximum time step limit to decode')
-tf.app.flags.DEFINE_string('model_path', 'checkpoints/lcsts_split_pointer_generator/lcsts.ckpt-685000',
+tf.app.flags.DEFINE_string('model_path', 'checkpoints/lcsts_split_pointer_generator_limit/lcsts.ckpt-690000',
                            'Path to a specific model checkpoint.')
 tf.app.flags.DEFINE_string('inference_input', 'storage/system.input.txt', 'Decoding input path')
 tf.app.flags.DEFINE_string('inference_output', 'storage/system.output.txt', 'Decoding output path')
@@ -71,6 +71,7 @@ def attention_data(attention, source, summarization):
     source_length = len(source.strip().split()[:80])
     summarization_length = len(summarization.strip().split()[:25])
     result = []
+    print('Attention', attention.shape)
     attention = attention.tolist()
     for i in range(summarization_length):
         for j in range(source_length):
@@ -121,10 +122,12 @@ fout = open(FLAGS.inference_output, 'w', encoding='utf-8')
 import jieba
 
 from flask import Flask, request, render_template
+from flask_cors import CORS
 
 space = ' '
 
 app = Flask(__name__)
+CORS(app)
 
 
 def copy_info(result, predicts, p_gen_seq):
@@ -133,7 +136,7 @@ def copy_info(result, predicts, p_gen_seq):
     p_gen_seq = p_gen_seq.tolist()
     info = []
     result = result.split()
-    for ind, seq in enumerate(predicts[:25]):
+    for ind, seq in enumerate(predicts[:24]):
         if seq == 1:
             break
         item = {
@@ -148,6 +151,8 @@ def copy_info(result, predicts, p_gen_seq):
 @app.route('/summarize', methods=['GET'])
 def summarize():
     source_text = request.args.get('source')
+    limit = request.args.get('limit')
+    # source_text = '正 处于 风口浪尖 的 国内 奶粉 行业 出现 大 交易 。 蒙牛 乳业 （ 02319 . HK ） 以及 雅士利 （ 01230 . HK ） 昨日 发布公告 称 ， 蒙牛 乳业 将 斥资 81.5 亿港元 收购 雅士利 约 65.4% 股权 。 业界 称 ， 此举 有助于 蒙牛 乳业 补 上 奶粉 短板 ， 以期 重新 超越 伊利 成为 行业 领头羊 。'
     source_text = space.join(jieba.lcut(source_text.replace(space, '')))
     
     with open(FLAGS.inference_input, 'w', encoding='utf-8') as f:
@@ -173,7 +178,8 @@ def summarize():
                                                                                           encoder_inputs=source,
                                                                                           encoder_inputs_extend=source_extend,
                                                                                           encoder_inputs_length=source_len,
-                                                                                          oovs_max_size=oovs_max_size)
+                                                                                          oovs_max_size=oovs_max_size,
+                                                                                          limit=limit)
         print('Shape', predicts.shape, scores.shape, probabilities.shape, p_gens.shape)
         for predict_seq, score_seq, prob_seq, p_gen_seq, oovs_vocab, attn in zip(predicts, scores, probabilities,
                                                                                  p_gens, oovs_vocabs, attns):
@@ -186,28 +192,28 @@ def summarize():
     
     print('Attn', attn)
     print('Attn shape', attn.shape)
-    
-    print('Predicts SEQ', predict_seq, p_gen_seq)
-    
+    copy_infos = copy_info(summarization_text, predict_seq, p_gen_seq)
+
     attns_data = attention_data(attn, source_text, summarization_text)
     print(attns_data)
-    
-    copy_infos = copy_info(summarization_text, predict_seq, p_gen_seq)
     
     logger.info('Finished!')
     return json.dumps({
         'summarization': summarization_text,
         'gens': p_gens.tolist()[0],
         'attentions': attns_data,
-        # 'probabilities': probabilities.tolist()[0],
         'copy': copy_infos,
-        'scores': scores.tolist()[0],
-        
+    
+        # 'probabilities': probabilities.tolist()[0],
+        'scores': scores.tolist()[0]
     }, ensure_ascii=False)
 
 
 # if __name__ == '__main__':
 #     decode()
+
+# if __name__ == '__main__':
+#     summarize()
 
 # if __name__ == '__main__':
 #     # source = '今天 有传 在 北京 某 小区 ， 一 光头 明星 因 吸毒 被捕 的 消息 。 下午 北京警方 官方 微博 发布 声明 通报情况 ， 证实 该 明星 为 房祖名 。 房祖名 伙同 另外 6 人 ， 于 17 日晚 在 北京 朝阳区 三里屯 某 小区 的 暂住地 内 吸食毒品 ， 6 人 全部 被 警方 抓获 ， 且 当事人 对 犯案 实施 供认不讳 。'
@@ -219,11 +225,11 @@ def summarize():
 #
 # def hello_world():
 #     return 'Hello World!'
+#
+# @app.route('/')
+# def index():
+#     return render_template('index.html')
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-
+#
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5555, debug=True)
+    app.run(host='0.0.0.0', port=5556, debug=True)

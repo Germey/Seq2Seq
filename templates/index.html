@@ -29,8 +29,8 @@
 						请选择生成模型
 					</p>
 					<div class="m-b">
-						<el-radio v-model="lengthControl" :label="true">控制长度</el-radio>
-						<el-radio v-model="lengthControl" :label="false">无长度限制</el-radio>
+						<el-radio v-model="lengthControl" :label="true" @change="radioChange">控制长度</el-radio>
+						<el-radio v-model="lengthControl" :label="false" @change="radioChange">无长度限制</el-radio>
 					</div>
 				</div>
 				<div class="box-item" v-show="lengthControl">
@@ -38,7 +38,7 @@
 						请输入词数
 					</p>
 					<div class="m-b">
-						<el-input placeholder="请输入词数">
+						<el-input placeholder="请输入词数" v-model="limit">
 							<template slot="append">词</template>
 						</el-input>
 					</div>
@@ -55,6 +55,48 @@
 							v-model="summarization">
 						</el-input>
 					</div>
+				</div>
+				<div class="box-item">
+					<el-button type="primary" @click="summarize">提交</el-button>
+				</div>
+			</el-card>
+			<el-card class="box-card" v-if="mode=='extractive'">
+				<div class="box-item">
+					<p class="box-item-label">
+						请输入待分析的文本
+					</p>
+					<div class="m-b">
+						<el-input
+							type="textarea"
+							:rows="5"
+							resize="none"
+							placeholder="请输入内容"
+							v-model="source">
+						</el-input>
+					</div>
+				</div>
+				<div class="box-item">
+					<p class="box-item-label">
+						摘要句子数
+					</p>
+					<div class="m-b">
+						<el-input placeholder="请输入句子数" v-model="number">
+							<template slot="append">句</template>
+						</el-input>
+					</div>
+				</div>
+				<div class="box-item">
+					<p class="box-item-label">
+						摘要生成结果
+					</p>
+					<div class="m-b">
+						<el-input
+							type="textarea"
+							:rows="5"
+							placeholder="摘要结果"
+							v-model="summarization">
+						</el-input>
+					</div>
 
 				</div>
 				<div class="box-item">
@@ -63,18 +105,49 @@
 			</el-card>
 		</el-col>
 	</el-row>
-	<el-row>
+	<el-row v-if="mode == 'abstractive'">
 		<el-col :span="18" :offset="3">
 			<el-card class="box-card">
-				<div id="container" class="container" style="height: 600px"></div>
+				<h4 class="text-center" style="margin-bottom: 30px">生成结果复制生成情况</h4>
+				<div class="result-item" v-for="item in copyItems" alt="green" v-if="item['copy']">
+					<p>[[ item['word'] ]] </p>
+					<p>
+						[[ item['p_gen'] ]]
+					</p>
+					<p>
+						<small>Copyed</small>
+					</p>
+					<!--<p>[[ item['copy'] ]]</p>-->
+				</div>
+				<div class="result-item" alt="blue" v-else>
+					<p>[[ item['word'] ]] </p>
+					<p>
+						[[ item['p_gen'] ]]
+					</p>
+					<p>
+						<small>Generated</small>
+					</p>
+					<!--<p>[[ item['copy'] ]]</p>-->
+				</div>
+			</el-card>
+			<el-card class="box-card">
+				<h4 class="text-center">生成模型注意力分布</h4>
+				<div id="wrap">
+					<div id="container" class="container" style="height: 500px; width: 5000px"></div>
+				</div>
 			</el-card>
 		</el-col>
 	</el-row>
 </div>
 <style>
-	.container {
+
+	#wrap {
 		width: 100%;
-		overflow: scroll;
+		overflow-x: scroll;
+	}
+
+	.container {
+
 	}
 
 	.site-title {
@@ -99,6 +172,32 @@
 
 	.m-b {
 		margin-bottom: 15px;
+	}
+
+	.result-item {
+		width: 80px;
+		float: left;
+		height: 80px;
+		text-align: center;
+		margin-right: 10px;
+		padding: 10px;
+		border-radius: 5px;
+	}
+
+	.result-item[alt='blue'] {
+		background-color: #409EFF;
+		color: white;
+
+	}
+
+	.result-item p {
+		margin-bottom: 3px;
+	}
+
+	.result-item[alt='green'] {
+		background-color: #67c23a;
+		color: white;
+
 	}
 </style>
 
@@ -151,45 +250,112 @@
 			}
 		}]
 	};
-
+	Vue.options.delimiters = ["[[", "]]"]
 	new Vue({
 		el: '#app',
 		data() {
 			return {
 				source: '正处于风口浪尖的国内奶粉行业出现大交易。蒙牛乳业（02319.HK）以及雅士利（01230.HK）昨日发布公告称，蒙牛乳业将斥资81.5亿港元收购雅士利约65.4%股权。业界称，此举有助于蒙牛乳业补上奶粉短板，以期重新超越伊利成为行业领头羊。',
+				source3: '正处于风口浪尖的国内奶粉行业出现大交易。蒙牛乳业（02319.HK）以及雅士利（01230.HK）昨日发布公告称，蒙牛乳业将斥资81.5亿港元收购雅士利约65.4%股权。业界称，此举有助于蒙牛乳业补上奶粉短板，以期重新超越伊利成为行业领头羊。',
+				source2: '北京地铁17号线是一条贯穿中心城南北方向的轨道交通干线，全长49.7KM，全部为地下线，共有20座车站，换乘站9座，明年开工建成，17号线线路串联了通州、东城、朝阳、昌平四个行政区，建成通车后为支持和带动亦庄新城站前区、垡头工业区、朝阳港、CBD及未来科学城的发展将起到重要作用。',
 				lengthControl: false,
 				summarization: null,
 				tabIndex: '2',
 				mode: 'abstractive',
+				limit: null,
 				modeMap: {
 					'1': 'extractive',
 					'2': 'abstractive'
 				},
+				number: 1,
+				copyItems: [],
 				attentionsOption: null,
 			}
 		},
 		methods: {
+			radioChange(val) {
+				console.log(val)
+				if (val) {
+					this.source = this.source2
+				} else {
+					this.source = this.source3
+				}
+			},
 			summarize() {
-				$.ajax({
-					data: {
-						source: this.source
-					},
-					url: '/summarize',
-					dataType: 'json',
-					success: (data) => {
-						console.log(data)
-						this.summarization = data.summarization
-						option.xAxis.data = data.attentions[1]
-						option.yAxis.data = data.attentions[2]
-						option.series[0].data = data.attentions[0]
-						this.attentionsOption = option
-						var dom = document.getElementById("container");
-						var myChart = echarts.init(dom);
-						var app = {};
-						myChart.setOption(this.attentionsOption, true);
-
+				if (this.mode === 'abstractive') {
+					if (!this.lengthControl) {
+						$.ajax({
+							data: {
+								source: this.source
+							},
+							url: '/summarize',
+							dataType: 'json',
+							success: (data) => {
+								console.log(data)
+								this.summarization = data.summarization
+								this.copyItems = data.copy
+								option.xAxis.data = data.attentions[1]
+								option.yAxis.data = data.attentions[2]
+								option.series[0].data = data.attentions[0]
+								this.attentionsOption = option
+								var dom = document.getElementById("container");
+								var myChart = echarts.init(dom);
+								var app = {};
+								myChart.setOption(this.attentionsOption, true);
+							}
+						})
+					} else {
+						$.ajax({
+							data: {
+								source: this.source,
+								limit: this.limit
+							},
+							url: 'http://localhost:5556/summarize',
+							dataType: 'json',
+							success: (data) => {
+								console.log(data)
+								this.copyItems = data.copy
+								this.summarization = data.summarization
+								option.xAxis.data = data.attentions[1]
+								option.yAxis.data = data.attentions[2]
+								option.series[0].data = data.attentions[0]
+								this.attentionsOption = option
+								var dom = document.getElementById("container");
+								var myChart = echarts.init(dom);
+								var app = {};
+								myChart.setOption(this.attentionsOption, true);
+							}
+						})
 					}
-				})
+				} else {
+					$.ajax({
+						data: {
+							source: this.source,
+							number: this.number
+						},
+						url: 'http://localhost:5557/summarize',
+						dataType: 'json',
+						success: (data) => {
+							let result = ''
+							data.forEach((item) => {
+								result += item.summarization
+								result += '\n'
+							})
+							this.summarization = result
+							// this.copyItems =
+							// console.log(data)
+							// this.summarization = data.summarization
+							// option.xAxis.data = data.attentions[1]
+							// option.yAxis.data = data.attentions[2]
+							// option.series[0].data = data.attentions[0]
+							// this.attentionsOption = option
+							// var dom = document.getElementById("container");
+							// var myChart = echarts.init(dom);
+							// var app = {};
+							// myChart.setOption(this.attentionsOption, true);
+						}
+					})
+				}
 			},
 			tabChanged(key, keyPath) {
 				this.mode = this.modeMap[key]
@@ -243,7 +409,7 @@
 		},
 		visualMap: {
 			min: 0,
-			max: 10,
+			max: 1,
 			calculable: true,
 			orient: 'horizontal',
 			left: 'center',

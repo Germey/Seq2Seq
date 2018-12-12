@@ -125,8 +125,10 @@ class PointerGeneratorLimitLabModel():
             self.decoder_inputs_inference = self.decoder_inputs
             self.logger.debug('decoder_inputs_inference %s', self.decoder_inputs_inference)
             
+            self.limit = tf.placeholder(dtype=tf.int32, shape=[])
+            
             self.decoder_inputs_inference_length = tf.ones(shape=[self.batch_size], dtype=tf.int32,
-                                                           name='decoder_inputs_inference_length') * (5 + 1)
+                                                           name='decoder_inputs_inference_length') * (self.limit + 1)
             self.logger.debug('decoder_inputs_inference_length %s', self.decoder_inputs_inference_length)
         
         with tf.variable_scope('attention'):
@@ -377,7 +379,6 @@ class PointerGeneratorLimitLabModel():
                 
                 with tf.variable_scope('loop', reuse=tf.AUTO_REUSE):
                     
-
                     for i, inputs in enumerate(self.decoder_inputs_embedded_unstack):
                         # length_embedded: [batch_size, embedding_size]
                         length_embedded = tf.nn.embedding_lookup(params=self.length_embeddings,
@@ -494,9 +495,7 @@ class PointerGeneratorLimitLabModel():
                 self.decoder_p_gens = []
                 self.decoder_greater_indices = []
                 self.decoder_history = []
-
-                
-                
+                self.decoder_attentions = []
                 
                 # decoder_initial_tokens: [batch_size]
                 self.decoder_initial_tokens = tf.ones(shape=[self.batch_size], dtype=tf.int32,
@@ -514,7 +513,7 @@ class PointerGeneratorLimitLabModel():
                 
                 with tf.variable_scope('loop', reuse=tf.AUTO_REUSE):
                     last_predict = tf.constant(-1, tf.int64)
-
+                    
                     for _ in range(self.decoder_max_time_steps):
                         # length_embedded: [batch_size, embedding_size]
                         length_embedded = tf.nn.embedding_lookup(params=self.length_embeddings,
@@ -532,7 +531,7 @@ class PointerGeneratorLimitLabModel():
                         p_gen = tf.nn.sigmoid(p_gen_dense, name='p_gen_sigmoid')
                         self.logger.debug('p_gen %s', p_gen)
                         self.decoder_p_gens.append(p_gen)
-
+                        
                         inputs = tf.concat([inputs, c_i, length_embedded], axis=1)
                         outputs, state = self.decoder_cell(inputs=inputs, state=state)
                         
@@ -548,11 +547,13 @@ class PointerGeneratorLimitLabModel():
                         # attention_distribution: [batch_size, encoder_inputs_length]
                         attention_distribution = alpha_i
                         
+                        self.decoder_attentions.append(attention_distribution)
+                        
                         # final_distribution: [batch_size, decoder_vocab_size + oovs_max_size]
                         final_distribution = self.merge_distribution(p_gen, attention_distribution, vocab_distribution,
                                                                      self.oovs_max_size)
                         # self.decoder_probabilities.append(final_distribution)
-
+                        
                         self.logger.debug('final_distribution %s', final_distribution)
                         
                         length = tf.cast(tf.multiply(tf.cast(length > 0, tf.float32), tf.ones([self.batch_size]) * -1),
@@ -564,48 +565,46 @@ class PointerGeneratorLimitLabModel():
                         
                         # argmax index
                         predicts = tf.argmax(final_distribution, -1)
-
+                        
                         predict = predicts[0]
                         self.logger.debug('predict %s', predict)
-
+                        
                         # ===============不和上一个重复
-                        # predicts_top_k = tf.nn.top_k(final_distribution, 5).indices
-                        # self.logger.debug('predicts_top_k %s', predicts_top_k)
-                        #
-                        # if not last_predict is None:
-                        #     predicts = tf.cond(tf.equal(last_predict, predict),
-                        #                        lambda: tf.cast(predicts_top_k[:, -1], tf.int64),
-                        #                        lambda: predicts)
-                        #     self.logger.debug('New Predicts %s', predicts)
-                        #     last_predict = predicts[0]
-                        #
-                        # self.logger.debug('predicts %s', predicts)
-
-                        # ===============不和上一个重复
-                        # ================完全不重复
-
-                        temp_predict = None
                         predicts_top_k = tf.nn.top_k(final_distribution, 5).indices
-
-                        print('SSSTack', tf.stack(self.decoder_history))
-                        print(tf.cast(predict, tf.float32))
-                        # print()
-
-                        for i in range(5):
-                            predicts = tf.cond(tf.greater(tf.reduce_sum(
-                                tf.cast(tf.equal(tf.cast(tf.stack(self.decoder_history), tf.float32),
-                                                 tf.cast(predict, tf.float32)),
-                                        dtype=tf.float32)), tf.constant(0, dtype=tf.float32)),
-                                lambda: tf.cast(predicts_top_k[:, i], tf.int64),
-                                lambda: predicts)
-                        print('PPPPredicts', predicts)
-                        predict = predicts[0]
-                        self.decoder_history.append(predict)
-                        print(predict)
-
+                        self.logger.debug('predicts_top_k %s', predicts_top_k)
+                        
+                        if not last_predict is None:
+                            predicts = tf.cond(tf.equal(last_predict, predict),
+                                               lambda: tf.cast(predicts_top_k[:, -1], tf.int64),
+                                               lambda: predicts)
+                            self.logger.debug('New Predicts %s', predicts)
+                            last_predict = predicts[0]
+                        
+                        self.logger.debug('predicts %s', predicts)
+                        
+                        # ===============不和上一个重复
                         # ================完全不重复
                         
+                        # temp_predict = None
+                        # predicts_top_k = tf.nn.top_k(final_distribution, 5).indices
+                        #
+                        # print('SSSTack', tf.stack(self.decoder_history))
+                        # print(tf.cast(predict, tf.float32))
+                        # # print()
+                        #
+                        # for i in range(5):
+                        #     predicts = tf.cond(tf.greater(tf.reduce_sum(
+                        #         tf.cast(tf.equal(tf.cast(tf.stack(self.decoder_history), tf.float32),
+                        #                          tf.cast(predict, tf.float32)),
+                        #                 dtype=tf.float32)), tf.constant(0, dtype=tf.float32)),
+                        #         lambda: tf.cast(predicts_top_k[:, i], tf.int64),
+                        #         lambda: predicts)
+                        # print('PPPPredicts', predicts)
+                        # predict = predicts[0]
+                        # self.decoder_history.append(predict)
+                        # print(predict)
                         
+                        # ================完全不重复
                         
                         self.logger.debug('predicts %s', predicts)
                         
@@ -617,7 +616,7 @@ class PointerGeneratorLimitLabModel():
                         
                         self.logger.debug('greater index %s', greater_index)
                         self.decoder_greater_indices.append(greater_index)
-
+                        
                         indices = tf.ones([self.batch_size], tf.int64) - greater_index
                         
                         self.logger.debug('indices %s', indices)
@@ -641,6 +640,8 @@ class PointerGeneratorLimitLabModel():
                 self.decoder_scores = tf.stack(self.decoder_scores, axis=1)
                 self.decoder_p_gens = tf.stack(self.decoder_p_gens, axis=1)
                 self.decoder_greater_indices = tf.stack(self.decoder_greater_indices, axis=1)
+                self.decoder_attentions = tf.stack(self.decoder_attentions, axis=1)
+                
                 self.logger.debug('decoder_probabilities %s', self.decoder_probabilities)
                 self.logger.debug('decoder_predicts %s', self.decoder_predicts)
                 self.logger.debug('decoder_scores %s', self.decoder_scores)
@@ -799,7 +800,7 @@ class PointerGeneratorLimitLabModel():
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs
     
-    def inference(self, sess, encoder_inputs, encoder_inputs_extend, encoder_inputs_length, oovs_max_size):
+    def inference(self, sess, encoder_inputs, encoder_inputs_extend, encoder_inputs_length, oovs_max_size, limit):
         """
         inference process
         :param sess: session object
@@ -812,7 +813,8 @@ class PointerGeneratorLimitLabModel():
             self.encoder_inputs_extend.name: encoder_inputs_extend,
             self.encoder_inputs_length.name: encoder_inputs_length,
             self.oovs_max_size.name: oovs_max_size,
-            self.keep_prob.name: 1
+            self.keep_prob.name: 1,
+            self.limit: limit
         }
         
         output_feed = [
@@ -820,7 +822,8 @@ class PointerGeneratorLimitLabModel():
             self.decoder_scores,
             self.decoder_probabilities,
             self.decoder_p_gens,
-            self.decoder_greater_indices
+            self.decoder_greater_indices,
+            self.decoder_attentions
         ]
         outputs = sess.run(fetches=output_feed, feed_dict=input_feed)
         return outputs

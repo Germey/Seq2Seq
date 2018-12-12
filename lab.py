@@ -79,6 +79,8 @@ def seq2words(seq, inverse_target_dictionary, oovs_vocab=None):
 
 
 
+
+
 def decode():
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
     

@@ -533,39 +533,39 @@ class PointerGeneratorLabModel():
                         
                         
                         #===============不和上一个重复
-                        predicts_top_k = tf.nn.top_k(final_distribution, 5).indices
-                        self.logger.debug('predicts_top_k %s', predicts_top_k)
-
-                        if not last_predict is None:
-                            predicts = tf.cond(tf.equal(last_predict, predict),
-                                               lambda: tf.cast(predicts_top_k[:, -1], tf.int64),
-                                               lambda: predicts)
-                            self.logger.debug('New Predicts %s', predicts)
-                            last_predict = predicts[0]
-
-                        self.logger.debug('predicts %s', predicts)
+                        # predicts_top_k = tf.nn.top_k(final_distribution, 5).indices
+                        # self.logger.debug('predicts_top_k %s', predicts_top_k)
+                        #
+                        # if not last_predict is None:
+                        #     predicts = tf.cond(tf.equal(last_predict, predict),
+                        #                        lambda: tf.cast(predicts_top_k[:, -1], tf.int64),
+                        #                        lambda: predicts)
+                        #     self.logger.debug('New Predicts %s', predicts)
+                        #     last_predict = predicts[0]
+                        #
+                        # self.logger.debug('predicts %s', predicts)
                         #
                         # ===============不和上一个重复
                         # ================完全不重复
                         
-                        # temp_predict = None
-                        # predicts_top_k = tf.nn.top_k(final_distribution, 5).indices
-                        #
-                        # print('SSSTack', tf.stack(self.decoder_history))
-                        # print(tf.cast(predict, tf.float32))
-                        # # print()
-                        #
-                        # for i in range(5):
-                        #     predicts = tf.cond(tf.greater(tf.reduce_sum(
-                        #         tf.cast(tf.equal(tf.cast(tf.stack(self.decoder_history), tf.float32),
-                        #                          tf.cast(predict, tf.float32)),
-                        #                 dtype=tf.float32)), tf.constant(0, dtype=tf.float32)),
-                        #         lambda: tf.cast(predicts_top_k[:, i], tf.int64),
-                        #         lambda: predicts)
-                        # print('PPPPredicts', predicts)
-                        # predict = predicts[0]
-                        # self.decoder_history.append(predict)
-                        # print(predict)
+                        temp_predict = None
+                        predicts_top_k = tf.nn.top_k(final_distribution, 5).indices
+
+                        print('SSSTack', tf.stack(self.decoder_history))
+                        print(tf.cast(predict, tf.float32))
+                        # print()
+
+                        for i in range(5):
+                            predicts = tf.cond(tf.greater(tf.reduce_sum(
+                                tf.cast(tf.equal(tf.cast(tf.stack(self.decoder_history), tf.float32),
+                                                 tf.cast(predict, tf.float32)),
+                                        dtype=tf.float32)), tf.constant(0, dtype=tf.float32)),
+                                lambda: tf.cast(predicts_top_k[:, i], tf.int64),
+                                lambda: predicts)
+                        print('PPPPredicts', predicts)
+                        predict = predicts[0]
+                        self.decoder_history.append(predict)
+                        print(predict)
                         
                         # ================完全不重复
                         
